@@ -1,4 +1,19 @@
 import argparse
+from utils import *
+
+def make_batches():
+    """
+    :returns: Dumps pickle files in respective dataset/split folder.
+    """
+    text = read("../data/{}/{}/in.txt".format(args.dataset, args.split))
+    tb   = read("../data/{}/{}/out_tb.txt".format(args.dataset, args.split))
+    lbl  = read("../data/{}/{}/out_lbl.txt".format(args.dataset, args.split))
+
+    assert(len(text) == len(tb) == len(lbl))
+
+    data = zip(text, tb, lbl)
+    pdb.set_trace()
+    
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='NER')
@@ -7,3 +22,4 @@ if __name__ == "__main__":
     parser.add_argument('-split',   dest="split",   default='train',  help='train/dev/test')
 
     args = parser.parse_args()
+    make_batches()
