@@ -117,7 +117,7 @@ def create_train_data(corpus, core_dict, full_dict, dataset):
             for pos, gram in enumerate(grams):                              #pos is the word number in line of the first word of this ngram
                 gram = ' '.join(list(gram))
 
-                if gram in core_dict:
+                if gram in core_dict:                                       #case senseitive checking
                     if tb[pos] == 'I' and tb[pos + n - 1] == 'I':           #to avoid consecutive ngrams to be brought together.
                         tb[pos + 1: pos + n] = ['O']*(n-1)
 
