@@ -38,6 +38,24 @@ def create_vocab(corpus, dataset):
 
     sorted_wrds = [wrd for wrd, freq in vocab.most_common()]
     write(sorted_wrds, '../data/{}/vocab.txt'.format(dataset))
+
+def ck_to_txt(ck_fname, dataset):
+    """
+    :ck_fname: dev/test file provided by autoNER
+    :returns: nothing. Writes dev/test file to ../data/dataset/dev/in.txt and out.txt
+
+    """
+    
+
+def get_tie_or_break(corpus, core_dict, full_dict):
+    """
+    :corpus: list of lines
+    :core_dict: each line is label <tab> entity
+    :full_dict: each line is entity
+    :returns: list of shape of corpus. 1 denotes break b'w w_i and w_{i-1}, 0 denotes tie, -1 denotes unk
+    """
+    pass
+    
     
 
 if __name__ == "__main__":
