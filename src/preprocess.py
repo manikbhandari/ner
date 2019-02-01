@@ -22,7 +22,7 @@ def read_corpus(raw_fname, one_wrd=False):
             joined_corpus.append(' '.join(line))
             line = []
 
-    assert(len(line) == 0)                  #ensure file ends in a blank line
+    assert(len(line) == 0)                                                  #ensure file ends in a blank line
     return joined_corpus
 
 def read_core_dict(core_dict_fname):
@@ -58,7 +58,7 @@ def create_vocab(corpus, dataset):
 
     vocab = Counter()
     for line in corpus:
-        vocab.update(line.split(' '))                           #might need better tokenization here.
+        vocab.update(line.split(' '))                                       #might need better tokenization here.
 
     sorted_wrds = [wrd for wrd, freq in vocab.most_common()]
     write(sorted_wrds, '../data/{}/vocab.txt'.format(dataset))
@@ -88,7 +88,7 @@ def ck_to_txt(ck_fname, dataset, split='dev'):
             tmp_lbl.append(line.split(' ')[2])
 
 
-    assert(len(tmp_text) == 0)                  #ensure file ends in a blank line
+    assert(len(tmp_text) == 0)                                              #ensure file ends in a blank line
     write(text, '../data/{}/{}/in.txt'.format(dataset, split))
     write(tb,   '../data/{}/{}/out_tb.txt'.format(dataset, split))
     write(lbl,  '../data/{}/{}/out_lbl.txt'.format(dataset, split))
@@ -114,7 +114,7 @@ def create_train_data(corpus, core_dict, full_dict, dataset):
         while n > 0:
             grams = list(ngrams(line.split(), n))
 
-            for pos, gram in enumerate(grams):                          #pos is the word number in line of the first word of this ngram
+            for pos, gram in enumerate(grams):                              #pos is the word number in line of the first word of this ngram
                 gram = ' '.join(list(gram))
 
                 if gram in core_dict:
@@ -125,7 +125,7 @@ def create_train_data(corpus, core_dict, full_dict, dataset):
 
                 elif gram in full_dict:
                     if tb[pos] == 'I' and tb[pos + n - 1] == 'I':
-                        tb[pos + 1: pos + n] = ['O']*(n-1)                #not adding labels here since they are None
+                        tb[pos + 1: pos + n] = ['O']*(n-1)                  #not adding labels here since they are None
             n -= 1
 
         tie_or_break.append(' '.join(tb))
@@ -143,7 +143,7 @@ if __name__ == "__main__":
     core_dict  = read_core_dict('../data/{}/dict_core.txt'.format(dataset))
     full_dict  = read_full_dict('../data/{}/dict_full.txt'.format(dataset))
 
-    # create_vocab(corpus, dataset)
-    # ck_to_txt('../data/BC5CDR/truth_dev.ck', dataset, split='dev')
-    # ck_to_txt('../data/BC5CDR/truth_test.ck', dataset, split='test')
+    create_vocab(corpus, dataset)
+    ck_to_txt('../data/BC5CDR/truth_dev.ck', dataset, split='dev')
+    ck_to_txt('../data/BC5CDR/truth_test.ck', dataset, split='test')
     create_train_data(corpus, core_dict, full_dict, dataset)
