@@ -138,7 +138,10 @@ def create_train_data(corpus, core_dict, full_dict, dataset):
     
 
 if __name__ == "__main__":
-    dataset    = 'BC5CDR' 
+    parser = argparse.ArgumentParser(description='NER')
+    parser.add_argument('-dataset', dest="dataset", default='BC5CDR', help='')
+    args = parser.parse_args()
+
     corpus     = read_corpus('../data/{}/raw_corpus.txt'.format(dataset), one_wrd=True)
     core_dict  = read_core_dict('../data/{}/dict_core.txt'.format(dataset))
     full_dict  = read_full_dict('../data/{}/dict_full.txt'.format(dataset))
