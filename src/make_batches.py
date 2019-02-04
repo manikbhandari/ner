@@ -1,4 +1,5 @@
 import argparse
+import json
 from utils import *
 
 def make_batches():
@@ -21,7 +22,7 @@ def dump_vocab():
               Always: I = 1 = break and O = 0 = tie
     """    
     wvocab = read('../data/{}/vocab.txt'.format(args.dataset))
-    wvocab = [' '] + wvocab                                                                   #add space as a word to vocab
+    wvocab = wvocab + [' ']                                                                   #add space as a word to vocab
 
     wvoc2id = {i: wrd for i, wrd in enumerate(wvocab)}
     id2wvoc = {wrd: i for i, wrd in enumerate(wvocab)}
@@ -34,9 +35,19 @@ def dump_vocab():
 
     labels = read('../data/{}/train/out_lbl.txt'.format(args.dataset))
     labels = [lbl for line in labels for lbl in line.split()]
-    labels = set(labels)
+    labels = list(set(labels))
 
-    pdb.set_trace()
+    lbl2id = {i: lbl for i, lbl in enumerate(labels)}
+    id2lbl = {lbl: i for i, lbl in enumerate(labels)}
+
+    json.dump(wvoc2id, open('../data/{}/wvoc2id.json'.format(args.dataset), 'w'))
+    json.dump(id2wvoc, open('../data/{}/id2wvoc.json'.format(args.dataset), 'w'))
+
+    json.dump(cvoc2id, open('../data/{}/cvoc2id.json'.format(args.dataset), 'w'))
+    json.dump(id2cvoc, open('../data/{}/id2cvoc.json'.format(args.dataset), 'w'))
+
+    json.dump(lbl2id, open('../data/{}/lbl2id.json'.format(args.dataset), 'w'))
+    json.dump(id2lbl, open('../data/{}/id2lbl.json'.format(args.dataset), 'w'))
 
 
 
