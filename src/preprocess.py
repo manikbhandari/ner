@@ -1,8 +1,11 @@
 #convert raw corpus, core dict and full dict to feedable form
+import os
+import argparse
+
 from utils import *
 from collections import Counter
 from nltk import ngrams
-import os
+import json
 
 def read_corpus(raw_fname, one_wrd=False):
     """
@@ -14,15 +17,14 @@ def read_corpus(raw_fname, one_wrd=False):
     if not one_wrd: return lines
 
     joined_corpus = []
-    line          = []
+    line          = ['<sos>']
     for wrd in lines:
         if len(wrd) != 0: 
             line.append(wrd)
         else:             
-            joined_corpus.append(' '.join(line))
-            line = []
+            joined_corpus.append(' '.join(line + ['<eos>']))
+            line = ['<sos>']
 
-    assert(len(line) == 0)                                                  #ensure file ends in a blank line
     return joined_corpus
 
 def read_core_dict(core_dict_fname):
@@ -130,6 +132,7 @@ def create_train_data(corpus, core_dict, full_dict, dataset):
 
         tie_or_break.append(' '.join(tb))
         labels.append(' '.join(lbl))
+
         if i % 1000 == 0: print("finished line {}".format(i))
 
     write(corpus,       '../data/{}/train/in.txt'.format(dataset))
@@ -145,8 +148,8 @@ def dump_vocab():
     wvocab = read('../data/{}/vocab.txt'.format(args.dataset))
     wvocab = ['<pad>'] + wvocab + [' ']                                                                   #add space and word as a words to vocab. pad index is 0.
 
-    wvoc2id = {i: wrd for i, wrd in enumerate(wvocab)}
-    id2wvoc = {wrd: i for i, wrd in enumerate(wvocab)}
+    wvoc2id = {wrd: i for i, wrd in enumerate(wvocab)}
+    id2wvoc = {i: wrd for i, wrd in enumerate(wvocab)}
 
     chars = [c for wrd in wvocab for c in wrd]
     chars = ['<pad>'] + list(set(chars))                                                                    # add pad as character. pad index is 0.
@@ -158,8 +161,8 @@ def dump_vocab():
     labels = [lbl for line in labels for lbl in line.split()]
     labels = list(set(labels))
 
-    lbl2id = {i: lbl for i, lbl in enumerate(labels)}
-    id2lbl = {lbl: i for i, lbl in enumerate(labels)}
+    lbl2id = {lbl: i for i, lbl in enumerate(labels)}
+    id2lbl = {i: lbl for i, lbl in enumerate(labels)}
 
     json.dump(wvoc2id, open('../data/{}/wvoc2id.json'.format(args.dataset), 'w'))
     json.dump(id2wvoc, open('../data/{}/id2wvoc.json'.format(args.dataset), 'w'))
@@ -176,12 +179,12 @@ if __name__ == "__main__":
     parser.add_argument('-dataset', dest="dataset", default='BC5CDR', help='')
     args = parser.parse_args()
 
-    corpus     = read_corpus('../data/{}/raw_corpus.txt'.format(dataset), one_wrd=True)
-    core_dict  = read_core_dict('../data/{}/dict_core.txt'.format(dataset))
-    full_dict  = read_full_dict('../data/{}/dict_full.txt'.format(dataset))
+    corpus     = read_corpus('../data/{}/raw_corpus.txt'.format(args.dataset), one_wrd=True)
+    core_dict  = read_core_dict('../data/{}/dict_core.txt'.format(args.dataset))
+    full_dict  = read_full_dict('../data/{}/dict_full.txt'.format(args.dataset))
 
-    create_vocab(corpus, dataset)
-    ck_to_txt('../data/BC5CDR/truth_dev.ck', dataset, split='dev')
-    ck_to_txt('../data/BC5CDR/truth_test.ck', dataset, split='test')
-    create_train_data(corpus, core_dict, full_dict, dataset)
+    create_vocab(corpus, args.dataset)
+    ck_to_txt('../data/BC5CDR/truth_dev.ck', args.dataset, split='dev')
+    ck_to_txt('../data/BC5CDR/truth_test.ck', args.dataset, split='test')
+    create_train_data(corpus, core_dict, full_dict, args.dataset)
     dump_vocab()

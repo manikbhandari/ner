@@ -1,5 +1,7 @@
 import ipdb as pdb
 
+pdb_multi = '!import code; code.interact(local=vars())'
+
 def read(fname):
     lines = []
     with open(fname, 'r', encoding='utf8') as f:
