@@ -135,6 +135,40 @@ def create_train_data(corpus, core_dict, full_dict, dataset):
     write(corpus,       '../data/{}/train/in.txt'.format(dataset))
     write(tie_or_break, '../data/{}/train/out_tb.txt'.format(dataset))
     write(labels,       '../data/{}/train/out_lbl.txt'.format(dataset))
+
+
+def dump_vocab():
+    """
+    :returns: Dumps wvoc2id, id2wvoc, cvoc2id, id2cvoc, lbl2id, id2lbl
+              Always: I = 1 = break and O = 0 = tie
+    """    
+    wvocab = read('../data/{}/vocab.txt'.format(args.dataset))
+    wvocab = ['<pad>'] + wvocab + [' ']                                                                   #add space and word as a words to vocab. pad index is 0.
+
+    wvoc2id = {i: wrd for i, wrd in enumerate(wvocab)}
+    id2wvoc = {wrd: i for i, wrd in enumerate(wvocab)}
+
+    chars = [c for wrd in wvocab for c in wrd]
+    chars = ['<pad>'] + list(set(chars))                                                                    # add pad as character. pad index is 0.
+
+    cvoc2id = {c: i for i, c in enumerate(chars)}
+    id2cvoc = {i: c for i, c in enumerate(chars)}
+
+    labels = read('../data/{}/train/out_lbl.txt'.format(args.dataset))
+    labels = [lbl for line in labels for lbl in line.split()]
+    labels = list(set(labels))
+
+    lbl2id = {i: lbl for i, lbl in enumerate(labels)}
+    id2lbl = {lbl: i for i, lbl in enumerate(labels)}
+
+    json.dump(wvoc2id, open('../data/{}/wvoc2id.json'.format(args.dataset), 'w'))
+    json.dump(id2wvoc, open('../data/{}/id2wvoc.json'.format(args.dataset), 'w'))
+
+    json.dump(cvoc2id, open('../data/{}/cvoc2id.json'.format(args.dataset), 'w'))
+    json.dump(id2cvoc, open('../data/{}/id2cvoc.json'.format(args.dataset), 'w'))
+
+    json.dump(lbl2id, open('../data/{}/lbl2id.json'.format(args.dataset), 'w'))
+    json.dump(id2lbl, open('../data/{}/id2lbl.json'.format(args.dataset), 'w'))
     
 
 if __name__ == "__main__":
@@ -150,3 +184,4 @@ if __name__ == "__main__":
     ck_to_txt('../data/BC5CDR/truth_dev.ck', dataset, split='dev')
     ck_to_txt('../data/BC5CDR/truth_test.ck', dataset, split='test')
     create_train_data(corpus, core_dict, full_dict, dataset)
+    dump_vocab()
