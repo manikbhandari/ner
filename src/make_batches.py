@@ -16,10 +16,13 @@ class Vocab(object):
         self.id2lbl = json.load(open('../data/{}/id2lbl.json'.format(args.dataset)))
         self.id2lbl = {int(key): val for key, val in self.id2lbl.items()}
 
+        self.tb2id  = {'I': 1, 'O': 0, '<pad>': 0}
+        self.id2tb  = {1: 'I', 0: 'O'}
+
         self.pad    = '<pad>'
 
 
-def make_batches(vocab):
+def make_batches(args, vocab):
     """
     :returns: Dumps pickle files in respective dataset/split folder.
     """
@@ -71,13 +74,12 @@ def make_batches(vocab):
         #make padded batch
         max_len = len(batch[-1][0])
         for el in batch:
-            in_wrds.append(el[0] + [vocab.pad] * (max_len - len(el[0])))
+            in_wrds.append(el[0]  + [vocab.pad] * (max_len - len(el[0])))
             in_chars.append(el[1] + [vocab.pad] * (max_len - len(el[1])))
-            out_tb.append(el[2] + [vocab.pad] * (max_len - len(el[2])))
+            out_tb.append(el[2]   + [vocab.pad] * (max_len - len(el[2])))
 
-        pdb.set_trace()
-
-        return batch
+        #ignore labels for now. Integrate them later.
+        yield (in_wrds, in_chars, out_tb)
     
 
 if __name__ == "__main__":
@@ -87,9 +89,9 @@ if __name__ == "__main__":
     parser.add_argument('-split',   dest="split",   default='train',                help='train/dev/test')
     parser.add_argument('-batch',   dest="batch",   default=64,         type=int,   help='train/dev/test')
 
-    args  = parser.parse_args()
-    vocab = Vocab(args)
+    args    = parser.parse_args()
+    vocab   = Vocab(args)
+    batches = make_batches(args, vocab)
 
-    batches = make_batches(vocab)
     pdb.set_trace()
     
