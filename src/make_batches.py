@@ -17,8 +17,8 @@ class Vocab(object):
         self.id2lbl = json.load(open('../data/{}/id2lbl.json'.format(args.dataset)))
         self.id2lbl = {int(key): val for key, val in self.id2lbl.items()}
 
-        self.tb2id  = {'I': 1, 'O': 0, '<pad>': 0}
-        self.id2tb  = {1: 'I', 0: 'O'}
+        self.tb2id  = {'I': 0, 'O': 1, '<pad>': 0}
+        self.id2tb  = {1: 'O', 0: 'I'}
 
         self.pad    = '<pad>'
 

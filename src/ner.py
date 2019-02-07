@@ -115,7 +115,7 @@ if __name__ == '__main__':
 	parser.add_argument('-drop',   			dest="drop",   			default=0,          type=float, help='dropout = 1 - keep_prob')
 	parser.add_argument('-bidir',   		dest="bidir",   		action='store_true',            help='use bidirectional rnn')
 
-	parser.add_argument('-epochs',   		dest="epochs",   		default=100,          type=int,   help='use bidirectional rnn')
+	parser.add_argument('-epochs',   		dest="epochs",   		default=100,        type=int,   help='use bidirectional rnn')
 	parser.add_argument('-batch',   		dest="batch",   		default=64,         type=int,   help='batch size')
 	parser.add_argument('-gpu',   			dest="gpu",   			default='0',       	 			help='batch size')
 	parser.add_argument('-optim',   		dest="optim",   		default=64,         type=int,   help='batch size')
