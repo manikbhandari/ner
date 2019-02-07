@@ -48,7 +48,7 @@ class NER(nn.Module):
 						 dropout	   = self.args.drop,  			 
 						 bidirectional = self.args.bidir)
 
-		self.hidden2out = nn.Linear(self.args.hidden_size, self.args.num_classes)
+		self.hidden2out = nn.Linear(self.args.hidden_size * (2 if self.args.bidir else 1), self.args.num_classes)
 		self.hidden 	= self.init_hidden
 		self.vocab 		= vocab
 
@@ -118,7 +118,7 @@ if __name__ == '__main__':
 	parser.add_argument('-epochs',   		dest="epochs",   		default=100,        type=int,   help='use bidirectional rnn')
 	parser.add_argument('-batch',   		dest="batch",   		default=64,         type=int,   help='batch size')
 	parser.add_argument('-gpu',   			dest="gpu",   			default='0',       	 			help='batch size')
-	parser.add_argument('-optim',   		dest="optim",   		default=64,         type=int,   help='batch size')
+	parser.add_argument('-optim',   		dest="optim",   		default='adam',            		help='batch size')
 	parser.add_argument('-lr',   			dest="lr",   			default=0.01,       type=float, help='batch size')
 
 	args    = parser.parse_args()
