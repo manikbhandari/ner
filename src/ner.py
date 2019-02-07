@@ -57,8 +57,12 @@ class NER(nn.Module):
 
 	def init_hidden(self):
 		#would random initialization help?
-		return (torch.zeros(self.args.num_layers * (2 if self.args.bidir else 1), self.args.batch, self.args.hidden_size).cuda(),
-				torch.zeros(self.args.num_layers * (2 if self.args.bidir else 1), self.args.batch, self.args.hidden_size).cuda())
+		if self.args.cell_type == 'lstm':
+			return (torch.zeros(self.args.num_layers * (2 if self.args.bidir else 1), self.args.batch, self.args.hidden_size).cuda(),
+					torch.zeros(self.args.num_layers * (2 if self.args.bidir else 1), self.args.batch, self.args.hidden_size).cuda())
+			
+		else: return torch.zeros(self.args.num_layers * (2 if self.args.bidir else 1), self.args.batch, self.args.hidden_size).cuda()
+					
 
 	def forward(self, in_wrds, in_chars):
 		cell_in  			  = torch.cat((self.wrd_embedding_lookup(in_wrds), self.char_embedding_lookup(in_chars)), dim=-1)
