@@ -1,5 +1,6 @@
 import argparse
 import json
+
 from utils import *
 
 class Vocab(object):
