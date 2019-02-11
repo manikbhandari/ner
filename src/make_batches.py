@@ -1,5 +1,6 @@
 import argparse
 import json
+import random
 
 from utils import *
 
@@ -17,8 +18,8 @@ class Vocab(object):
         self.id2lbl = json.load(open('../data/{}/id2lbl.json'.format(args.dataset)))
         self.id2lbl = {int(key): val for key, val in self.id2lbl.items()}
 
-        self.tb2id  = {'I': 0, 'O': 1, '<pad>': 0}
-        self.id2tb  = {1: 'O', 0: 'I'}
+        self.tb2id  = {'I': 1, 'O': 0, '<pad>': 0}
+        self.id2tb  = {1: 'I',  0: 'O'}
 
         self.pad    = '<pad>'
 
@@ -39,8 +40,8 @@ def make_batches(args, vocab):
 
         line_wrds = []
 
-        #initializw with all breaks
-        line_tb   = ['O'    for _ in range(len(line))]
+        #initializw with all ties
+        line_tb   = ['O' for _ in range(len(line))]
 
         for i, wrd in enumerate(line.split()):
             for char in wrd:
@@ -49,7 +50,7 @@ def make_batches(args, vocab):
             #don't append ' ' after the last word
             if i != len(line.split()) - 1:
                 line_wrds.append(' ')
-                line_tb[len(line_wrds)]  = tb.split()[i]
+                line_tb[len(line_wrds) - 1]  = tb.split()[i]
 
         in_wrds.append(line_wrds)
         out_tb.append(line_tb)
@@ -61,8 +62,8 @@ def make_batches(args, vocab):
 
     assert(len(in_wrds) == len(in_chars) == len(out_tb) == len(out_lbl))
 
-    data = zip(in_wrds, in_chars, out_tb, out_lbl)
-    data = sorted(data, key=lambda x: len(x[0]))
+    data = list(zip(in_wrds, in_chars, out_tb, out_lbl))
+    random.shuffle(data)
     data = [list(tup) for tup in data]
 
     st_idx = 0
@@ -70,17 +71,30 @@ def make_batches(args, vocab):
         batch  = data[st_idx : st_idx + args.batch]
         st_idx = st_idx + args.batch
 
-        in_wrds, in_chars, out_tb, out_lbl = [], [], [], []
+        in_wrds, in_chars, out_tb, out_lbl, lbl_mask = [], [], [], [], []
 
         #make padded batch
-        max_len = len(batch[-1][0])
+        max_len     = max([len(b[0]) for b in batch])
+        max_lbl_len = max([len(b[3]) for b in batch])
         for el in batch:
-            in_wrds.append(el[0]  + [vocab.pad] * (max_len - len(el[0])))
-            in_chars.append(el[1] + [vocab.pad] * (max_len - len(el[1])))
-            out_tb.append(el[2]   + [vocab.pad] * (max_len - len(el[2])))
+            in_wrds.append(el[0]         + [vocab.pad] * (max_len - len(el[0])))
+            in_chars.append(el[1]        + [vocab.pad] * (max_len - len(el[1])))
+            out_tb.append(el[2]          + [vocab.pad] * (max_len - len(el[2])))
+
+            out_lbl.append(el[3][1: -1]             + ['None'] * (max_lbl_len - len(el[3])))
+            lbl_mask.append([1] * len(el[3][1: -1]) + [0]      * (max_lbl_len - len(el[3])))
+
+        # in_lbl = []
+        # for el in out_tb:
+        #     in_lbl.append([y for y, tb in enumerate(el) if tb == 'I'])
+
+        # in_lbl_x = [el[:-1] for el in in_lbl]
+        # in_lbl_y = [el[1: ] for el in in_lbl]
+
+        # pdb.set_trace()
 
         #ignore labels for now. Integrate them later.
-        yield (in_wrds, in_chars, out_tb)
+        yield (in_wrds, in_chars, out_tb, out_lbl, lbl_mask)
     
 
 if __name__ == "__main__":

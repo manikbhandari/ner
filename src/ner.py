@@ -2,6 +2,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
+import numpy as np
 import time
 
 from make_batches import *
@@ -40,6 +41,8 @@ class NER(nn.Module):
 			cell = nn.LSTM
 		elif self.args.cell_type == 'gru':
 			cell = nn.GRU
+		else:
+			raise NotImplementedError('cell_type must be lstm/gru but given {}'.format(self.args.cell_type))
 
 		self.cell = cell(input_size    = self.args.wrd_embed_dim + self.args.char_embed_dim, 
 						 hidden_size   = self.args.hidden_size, 
@@ -65,9 +68,9 @@ class NER(nn.Module):
 					
 
 	def forward(self, in_wrds, in_chars):
-		cell_in  			  = torch.cat((self.wrd_embedding_lookup(in_wrds), self.char_embedding_lookup(in_chars)), dim=-1)
-		cell_out, self.hidden = self.cell(cell_in, self.hidden)
-		scores   			  = F.log_softmax(self.hidden2out(cell_out), dim=-1)
+		cell_in  			  	= torch.cat((self.wrd_embedding_lookup(in_wrds), self.char_embedding_lookup(in_chars)), dim=-1)
+		self.cell_out, self.hidden 	= self.cell(cell_in, self.hidden)
+		scores   			  	= F.log_softmax(self.hidden2out(self.cell_out), dim=-1)
 
 		return scores
 
@@ -83,15 +86,18 @@ def train(model, vocab, args):
 		st_time = time.time()
 
 		for batch_num, batch in enumerate(batches):
-			in_wrds, in_chars, out_tb = batch
+			in_wrds, in_chars, out_tb, out_lbl, lbl_mask = batch
 
 			in_wrds  = lookup(in_wrds, vocab, 'in_wrds').cuda()
 			in_chars = lookup(in_chars, vocab, 'in_chars').cuda()
 			out_tb   = lookup(out_tb, vocab, 'out_tb').cuda()
 
+
 			model.zero_grad()
 			model.hidden = model.init_hidden()
 			probs 		 = model(in_wrds, in_chars)
+
+			pdb.set_trace()
 
 			batch_loss = loss_fn(probs.view(args.batch, args.num_classes, -1), out_tb)
 			batch_loss = torch.sum(out_tb.float() * batch_loss)
@@ -101,7 +107,7 @@ def train(model, vocab, args):
 			optimizer.step()
 
 		time_taken = time.time() - st_time
-		print('epoch {} loss {:.4f} time_taken {:.4f}s'.format(epoch, epoch_loss, time_taken))
+		print('epoch {} loss {:.4f} avg_b_loss {:.4f} time_taken {:.4f}s'.format(epoch, epoch_loss, (epoch_loss/batch_num+1), time_taken))
 
 
 if __name__ == '__main__':
