@@ -194,19 +194,18 @@ if args.restart:
         model = torch.load(f)
 
     if not args.fp16: model = model.float()
-    model.apply(update_dropout)
-    model.apply(update_dropatt)
+    model.apply(update_dropout) # same as update_dropout(model)
+    model.apply(update_dropatt) # same as update_dropatt(model)
 
 else:
-    #TODO: Understand full model
     model = MemTransformerLM(ntokens, args.n_layer, args.n_head, args.d_model, args.d_head, args.d_inner, args.dropout, args.dropatt,
                             tie_weight     = args.tied,      d_embed     = args.d_embed,     div_val   = args.div_val,   tie_projs = tie_projs,    
                             pre_lnorm      = args.pre_lnorm, tgt_len     = args.tgt_len,     ext_len   = args.ext_len,   mem_len   = args.mem_len,   
                             cutoffs        = cutoffs,        same_length = args.same_length, attn_type = args.attn_type, clamp_len = args.clamp_len,   
                             sample_softmax = args.sample_softmax)
 
-    model.apply(weights_init)
-    model.word_emb.apply(weights_init) # ensure embedding init is not overridden by out_layer in case of weight sharing
+    model.apply(weights_init) # TransformerlM weights will get initialized.
+    model.word_emb.apply(weights_init) # TODO: Not able to understand this. ensure embedding init is not overridden by out_layer in case of weight sharing
 
 args.n_all_param    = sum([p.nelement() for p in model.parameters()])           # total number of parameters
 args.n_nonemb_param = sum([p.nelement() for p in model.layers.parameters()])    # non embedding parameters
@@ -255,27 +254,24 @@ if args.scheduler == 'cosine':
     # here we do not set eta_min to lr_min to be backward compatible
     # because in previous versions eta_min is default to 0
     # rather than the default value of lr_min 1e-6
-    scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer,
-        args.max_step, eta_min=args.eta_min) # should use eta_min arg
+    scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer, args.max_step, eta_min=args.eta_min) # should use eta_min arg
     if args.sample_softmax > 0:
-        scheduler_sparse = optim.lr_scheduler.CosineAnnealingLR(optimizer_sparse,
-            args.max_step, eta_min=args.eta_min) # should use eta_min arg
+        scheduler_sparse = optim.lr_scheduler.CosineAnnealingLR(optimizer_sparse, args.max_step, eta_min=args.eta_min) # should use eta_min arg
+
 elif args.scheduler == 'inv_sqrt':
     # originally used for Transformer (in Attention is all you need)
     def lr_lambda(step):
         # return a multiplier instead of a learning rate
-        if step == 0 and args.warmup_step == 0:
-            return 1.
-        else:
-            return 1. / (step ** 0.5) if step > args.warmup_step \
-                   else step / (args.warmup_step ** 1.5)
+        if step == 0 and args.warmup_step == 0: return 1.
+        else:                                   return 1. / (step ** 0.5) if step > args.warmup_step else step / (args.warmup_step ** 1.5)
+
     scheduler = optim.lr_scheduler.LambdaLR(optimizer, lr_lambda=lr_lambda)
+
 elif args.scheduler == 'dev_perf':
-    scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer,
-        factor=args.decay_rate, patience=args.patience, min_lr=args.lr_min)
+    scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, factor=args.decay_rate, patience=args.patience, min_lr=args.lr_min)
     if args.sample_softmax > 0:
-        scheduler_sparse = optim.lr_scheduler.ReduceLROnPlateau(optimizer_sparse,
-            factor=args.decay_rate, patience=args.patience, min_lr=args.lr_min)
+        scheduler_sparse = optim.lr_scheduler.ReduceLROnPlateau(optimizer_sparse, factor=args.decay_rate, patience=args.patience, min_lr=args.lr_min)
+
 elif args.scheduler == 'constant':
     pass
 
@@ -292,13 +288,13 @@ if args.restart:
         with open(os.path.join(args.restart_dir, 'optimizer.pt'), 'rb') as f:
             opt_state_dict = torch.load(f)
             optimizer.load_state_dict(opt_state_dict)
-    else:
-        print('Optimizer was not saved. Start from scratch.')
+
+    else: print('Optimizer was not saved. Start from scratch.')
 
 logging('=' * 100)
-for k, v in args.__dict__.items():
-    logging('    - {} : {}'.format(k, v))
+for k, v in args.__dict__.items(): logging('    - {} : {}'.format(k, v))
 logging('=' * 100)
+
 logging('#params = {}'.format(args.n_all_param))
 logging('#non emb params = {}'.format(args.n_nonemb_param))
 
@@ -343,45 +339,44 @@ def train():
     # Turn on training mode which enables dropout.
     global train_step, train_loss, best_val_loss, eval_start_time, log_start_time
     model.train()
-    if args.batch_chunk > 1:
-        mems = [tuple() for _ in range(args.batch_chunk)]
-    else:
-        mems = tuple()
+
+    if args.batch_chunk > 1: mems = [tuple() for _ in range(args.batch_chunk)]
+    else:                    mems = tuple()
+
     train_iter = tr_iter.get_varlen_iter() if args.varlen else tr_iter
-    for batch, (data, target, seq_len) in enumerate(train_iter):
+
+    for batch, (data, target, seq_len) in enumerate(train_iter): # batch is batch number
         model.zero_grad()
         if args.batch_chunk > 1:
-            data_chunks = torch.chunk(data, args.batch_chunk, 1)
+            data_chunks   = torch.chunk(data, args.batch_chunk, 1)
             target_chunks = torch.chunk(target, args.batch_chunk, 1)
+
             for i in range(args.batch_chunk):
-                data_i = data_chunks[i].contiguous()
-                target_i = target_chunks[i].contiguous()
-                ret = para_model(data_i, target_i, *mems[i])
+                data_i        = data_chunks[i].contiguous()
+                target_i      = target_chunks[i].contiguous()
+                ret           = para_model(data_i, target_i, *mems[i])
+
                 loss, mems[i] = ret[0], ret[1:]
-                loss = loss.float().mean().type_as(loss) / args.batch_chunk
-                if args.fp16:
-                    optimizer.backward(loss)
-                else:
-                    loss.backward()
+                loss          = loss.float().mean().type_as(loss) / args.batch_chunk
+
+                if args.fp16: optimizer.backward(loss)
+                else:         loss.backward()
+
                 train_loss += loss.float().item()
         else:
-            ret = para_model(data, target, *mems)
+            ret        = para_model(data, target, *mems)
             loss, mems = ret[0], ret[1:]
-            loss = loss.float().mean().type_as(loss)
-            if args.fp16:
-                optimizer.backward(loss)
-            else:
-                loss.backward()
+            loss       = loss.float().mean().type_as(loss)
+
+            if args.fp16: optimizer.backward(loss)
+            else:         loss.backward()
             train_loss += loss.float().item()
 
-        if args.fp16:
-            optimizer.clip_master_grads(args.clip)
-        else:
-            torch.nn.utils.clip_grad_norm_(model.parameters(), args.clip)
+        if args.fp16: optimizer.clip_master_grads(args.clip)
+        else:         torch.nn.utils.clip_grad_norm_(model.parameters(), args.clip)
 
         optimizer.step()
-        if args.sample_softmax > 0:
-            optimizer_sparse.step()
+        if args.sample_softmax > 0: optimizer_sparse.step()
 
         # step-wise learning rate annealing
         train_step += 1
@@ -390,58 +385,54 @@ def train():
             if train_step < args.warmup_step:
                 curr_lr = args.lr * train_step / args.warmup_step
                 optimizer.param_groups[0]['lr'] = curr_lr
-                if args.sample_softmax > 0:
-                    optimizer_sparse.param_groups[0]['lr'] = curr_lr * 2
+                if args.sample_softmax > 0: optimizer_sparse.param_groups[0]['lr'] = curr_lr * 2
+
             else:
                 if args.scheduler == 'cosine':
                     scheduler.step(train_step)
-                    if args.sample_softmax > 0:
-                        scheduler_sparse.step(train_step)
+                    if args.sample_softmax > 0: scheduler_sparse.step(train_step)
+
         elif args.scheduler == 'inv_sqrt':
             scheduler.step(train_step)
 
         if train_step % args.log_interval == 0:
             cur_loss = train_loss / args.log_interval
-            elapsed = time.time() - log_start_time
-            log_str = '| epoch {:3d} step {:>8d} | {:>6d} batches | lr {:.3g} ' \
-                      '| ms/batch {:5.2f} | loss {:5.2f}'.format(
-                epoch, train_step, batch+1, optimizer.param_groups[0]['lr'],
-                elapsed * 1000 / args.log_interval, cur_loss)
-            if args.dataset in ['enwik8', 'text8']:
-                log_str += ' | bpc {:9.5f}'.format(cur_loss / math.log(2))
-            else:
-                log_str += ' | ppl {:9.3f}'.format(math.exp(cur_loss))
+            elapsed  = time.time() - log_start_time
+            log_str  = '| epoch {:3d} step {:>8d} | {:>6d} batches | lr {:.3g} ' '| ms/batch {:5.2f} | loss {:5.2f}'.format(
+                        epoch, train_step, batch+1, optimizer.param_groups[0]['lr'], elapsed * 1000 / args.log_interval, cur_loss)
+
+            if args.dataset in ['enwik8', 'text8']: log_str += ' | bpc {:9.5f}'.format(cur_loss / math.log(2))
+            else:                                   log_str += ' | ppl {:9.3f}'.format(math.exp(cur_loss))
+
             logging(log_str)
+
             train_loss = 0
             log_start_time = time.time()
 
         if train_step % args.eval_interval == 0:
             val_loss = evaluate(va_iter)
+
             logging('-' * 100)
-            log_str = '| Eval {:3d} at step {:>8d} | time: {:5.2f}s ' \
-                      '| valid loss {:5.2f}'.format(
-                train_step // args.eval_interval, train_step,
-                (time.time() - eval_start_time), val_loss)
-            if args.dataset in ['enwik8', 'text8']:
-                log_str += ' | bpc {:9.5f}'.format(val_loss / math.log(2))
-            else:
-                log_str += ' | valid ppl {:9.3f}'.format(math.exp(val_loss))
+            log_str = '| Eval {:3d} at step {:>8d} | time: {:5.2f}s ' '| valid loss {:5.2f}'.format(
+                        train_step // args.eval_interval, train_step, (time.time() - eval_start_time), val_loss)
+
+            if args.dataset in ['enwik8', 'text8']: log_str += ' | bpc {:9.5f}'.format(val_loss / math.log(2))
+            else:                                   log_str += ' | valid ppl {:9.3f}'.format(math.exp(val_loss))
+
             logging(log_str)
             logging('-' * 100)
             # Save the model if the validation loss is the best we've seen so far.
             if not best_val_loss or val_loss < best_val_loss:
                 if not args.debug:
-                    with open(os.path.join(args.work_dir, 'model.pt'), 'wb') as f:
-                        torch.save(model, f)
-                    with open(os.path.join(args.work_dir, 'optimizer.pt'), 'wb') as f:
-                        torch.save(optimizer.state_dict(), f)
+                    with open(os.path.join(args.work_dir, 'model.pt'), 'wb') as f:     torch.save(model, f)
+                    with open(os.path.join(args.work_dir, 'optimizer.pt'), 'wb') as f: torch.save(optimizer.state_dict(), f)
+
                 best_val_loss = val_loss
 
             # dev-performance based learning rate annealing
             if args.scheduler == 'dev_perf':
                 scheduler.step(val_loss)
-                if args.sample_softmax > 0:
-                    scheduler_sparse.step(val_loss)
+                if args.sample_softmax > 0: scheduler_sparse.step(val_loss)
 
             eval_start_time = time.time()
 
@@ -449,11 +440,10 @@ def train():
             break
 
 # Loop over epochs.
-train_step = 0
-train_loss = 0
-best_val_loss = None
-
-log_start_time = time.time()
+train_step      = 0
+train_loss      = 0
+best_val_loss   = None
+log_start_time  = time.time()
 eval_start_time = time.time()
 
 # At any point you can hit Ctrl + C to break out of training early.
@@ -464,6 +454,7 @@ try:
             logging('-' * 100)
             logging('End of training')
             break
+
 except KeyboardInterrupt:
     logging('-' * 100)
     logging('Exiting from training early')
@@ -471,15 +462,15 @@ except KeyboardInterrupt:
 # Load the best saved model.
 with open(os.path.join(args.work_dir, 'model.pt'), 'rb') as f:
     model = torch.load(f)
+
 para_model = model.to(device)
 
 # Run on test data.
 test_loss = evaluate(te_iter)
+
 logging('=' * 100)
 if args.dataset in ['enwik8', 'text8']:
-    logging('| End of training | test loss {:5.2f} | test bpc {:9.5f}'.format(
-        test_loss, test_loss / math.log(2)))
+    logging('| End of training | test loss {:5.2f} | test bpc {:9.5f}'.format( test_loss, test_loss / math.log(2)))
 else:
-    logging('| End of training | test loss {:5.2f} | test ppl {:9.3f}'.format(
-        test_loss, math.exp(test_loss)))
+    logging('| End of training | test loss {:5.2f} | test ppl {:9.3f}'.format( test_loss, math.exp(test_loss)))
 logging('=' * 100)

@@ -493,44 +493,36 @@ class AdaptiveEmbedding(nn.Module):
         return embed
 
 class MemTransformerLM(nn.Module):
-    def __init__(self, n_token, n_layer, n_head, d_model, d_head, d_inner,
-                 dropout, dropatt, tie_weight=True, d_embed=None, 
-                 div_val=1, tie_projs=[False], pre_lnorm=False,
-                 tgt_len=None, ext_len=None, mem_len=None, 
-                 cutoffs=[], adapt_inp=False,
-                 same_length=False, attn_type=0, clamp_len=-1, 
-                 sample_softmax=-1):
+    def __init__(self, n_token, n_layer, n_head, d_model, d_head, d_inner, dropout, dropatt, 
+                 tie_weight = True,  d_embed        = None,  div_val     = 1,     tie_projs = [False], 
+                 pre_lnorm  = False, tgt_len        = None,  ext_len     = None,  mem_len   = None, 
+                 cutoffs    = [],    adapt_inp      = False, same_length = False, attn_type = 0, 
+                 clamp_len  = -1,    sample_softmax = -1):
+
         super(MemTransformerLM, self).__init__()
-        self.n_token = n_token
 
-        d_embed = d_model if d_embed is None else d_embed
-        self.d_embed = d_embed
-        self.d_model = d_model
-        self.n_head = n_head
-        self.d_head = d_head
-
-        self.word_emb = AdaptiveEmbedding(n_token, d_embed, d_model, cutoffs, 
-                                          div_val=div_val)
-
-        self.drop = nn.Dropout(dropout)
-
-        self.n_layer = n_layer
-
-        self.tgt_len = tgt_len
-        self.mem_len = mem_len
-        self.ext_len = ext_len
-        self.max_klen = tgt_len + ext_len + mem_len
-
+        self.n_token   = n_token
+        d_embed        = d_model if d_embed is None else d_embed
+        self.d_embed   = d_embed
+        self.d_model   = d_model
+        self.n_head    = n_head
+        self.d_head    = d_head
+        self.word_emb  = AdaptiveEmbedding(n_token, d_embed, d_model, cutoffs, div_val=div_val)
+        self.drop      = nn.Dropout(dropout)
+        self.n_layer   = n_layer
+        self.tgt_len   = tgt_len
+        self.mem_len   = mem_len
+        self.ext_len   = ext_len
+        self.max_klen  = tgt_len + ext_len + mem_len
         self.attn_type = attn_type
 
         self.layers = nn.ModuleList()
-        if attn_type == 0: # the default attention
-            for i in range(n_layer):
+        if attn_type == 0: # the default attention. this will have relative positional encoding.
+            for i in range(n_layer): # Why not use self.n_layer here?
                 self.layers.append(
                     RelPartialLearnableDecoderLayer(
                         n_head, d_model, d_head, d_inner, dropout,
-                        tgt_len=tgt_len, ext_len=ext_len, mem_len=mem_len,
-                        dropatt=dropatt, pre_lnorm=pre_lnorm)
+                        tgt_len=tgt_len, ext_len=ext_len, mem_len=mem_len, dropatt=dropatt, pre_lnorm=pre_lnorm)
                 )
         elif attn_type == 1: # learnable embeddings
             for i in range(n_layer):
@@ -540,7 +532,7 @@ class MemTransformerLM(nn.Module):
                         tgt_len=tgt_len, ext_len=ext_len, mem_len=mem_len,
                         dropatt=dropatt, pre_lnorm=pre_lnorm)
                 )
-        elif attn_type in [2, 3]: # absolute embeddings
+        elif attn_type in [2, 3]: # absolute embeddings. 2 corresponds to original transformer. TODO: what is 3?
             for i in range(n_layer):
                 self.layers.append(
                     DecoderLayer(
@@ -549,18 +541,19 @@ class MemTransformerLM(nn.Module):
                 )
 
         self.sample_softmax = sample_softmax
-        # use sampled softmax
-        if sample_softmax > 0:
+        
+        if sample_softmax > 0: # use sampled softmax
             self.out_layer = nn.Linear(d_model, n_token)
-            if tie_weight:
-                self.out_layer.weight = self.word_emb.weight
+
+            if tie_weight: self.out_layer.weight = self.word_emb.weight # Tie the weights of output and input embedding matrix.
+
             self.tie_weight = tie_weight
-            self.sampler = LogUniformSampler(n_token, sample_softmax)
+            self.sampler    = LogUniformSampler(n_token, sample_softmax)
 
         # use adaptive softmax (including standard softmax)
+        # TODO: understand what is adaptive softmax
         else:
-            self.crit = ProjectedAdaptiveLogSoftmax(n_token, d_embed, d_model, 
-                                                    cutoffs, div_val=div_val)
+            self.crit = ProjectedAdaptiveLogSoftmax(n_token, d_embed, d_model, cutoffs, div_val=div_val)
 
             if tie_weight:
                 for i in range(len(self.crit.out_layers)):
@@ -570,11 +563,12 @@ class MemTransformerLM(nn.Module):
                 for i, tie_proj in enumerate(tie_projs):
                     if tie_proj and div_val == 1 and d_model != d_embed:
                         self.crit.out_projs[i] = self.word_emb.emb_projs[0]
+
                     elif tie_proj and div_val != 1:
                         self.crit.out_projs[i] = self.word_emb.emb_projs[i]
 
         self.same_length = same_length
-        self.clamp_len = clamp_len
+        self.clamp_len   = clamp_len
 
         self._create_params()
 
@@ -586,18 +580,17 @@ class MemTransformerLM(nn.Module):
             self.pos_emb = PositionalEmbedding(self.d_model)
             self.r_w_bias = nn.Parameter(torch.Tensor(self.n_head, self.d_head))
             self.r_r_bias = nn.Parameter(torch.Tensor(self.n_head, self.d_head))
+
         elif self.attn_type == 1: # learnable
-            self.r_emb = nn.Parameter(torch.Tensor(
-                    self.n_layer, self.max_klen, self.n_head, self.d_head))
-            self.r_w_bias = nn.Parameter(torch.Tensor(
-                    self.n_layer, self.n_head, self.d_head))
-            self.r_bias = nn.Parameter(torch.Tensor(
-                    self.n_layer, self.max_klen, self.n_head))
+            self.r_emb    = nn.Parameter(torch.Tensor( self.n_layer, self.max_klen, self.n_head, self.d_head))
+            self.r_w_bias = nn.Parameter(torch.Tensor( self.n_layer, self.n_head, self.d_head))
+            self.r_bias   = nn.Parameter(torch.Tensor(self.n_layer, self.max_klen, self.n_head))
+
         elif self.attn_type == 2: # absolute standard
             self.pos_emb = PositionalEmbedding(self.d_model)
+
         elif self.attn_type == 3: # absolute deeper SA
-            self.r_emb = nn.Parameter(torch.Tensor(
-                    self.n_layer, self.max_klen, self.n_head, self.d_head))
+            self.r_emb = nn.Parameter(torch.Tensor( self.n_layer, self.max_klen, self.n_head, self.d_head))
 
     def reset_length(self, tgt_len, ext_len, mem_len):
         self.tgt_len = tgt_len
