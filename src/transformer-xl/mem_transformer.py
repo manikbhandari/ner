@@ -81,6 +81,7 @@ class MultiHeadAttn(nn.Module):
         self.pre_lnorm = pre_lnorm
 
     def forward(self, h, attn_mask=None, mems=None):
+        # h should be of size seq_len X bsz X emb_dim
         # [hlen x bsz x n_head x d_head]
 
         if mems is not None: c = torch.cat([mems, h], 0)
@@ -88,39 +89,36 @@ class MultiHeadAttn(nn.Module):
 
         if self.pre_lnorm: c = self.layer_norm(c)
 
-        head_q         = self.q_net(h)
-        head_k, head_v = torch.chunk(self.kv_net(c), 2, -1)
+        head_q         = self.q_net(h) # projects h to n_head * d_head dimensions
+        head_k, head_v = torch.chunk(self.kv_net(c), 2, -1) # kv_net projects it into d_model, 2 * n_head * d_head followed by chunk into two parts along -1 dim
 
-        head_q = head_q.view(h.size(0), h.size(1), self.n_head, self.d_head)
-        head_k = head_k.view(c.size(0), c.size(1), self.n_head, self.d_head)
-        head_v = head_v.view(c.size(0), c.size(1), self.n_head, self.d_head)
+        head_q = head_q.view(h.size(0), h.size(1), self.n_head, self.d_head) # seq_len X bsz X n_head X d_head
+        head_k = head_k.view(c.size(0), c.size(1), self.n_head, self.d_head) # seq_len X bsz X n_head X d_head
+        head_v = head_v.view(c.size(0), c.size(1), self.n_head, self.d_head) # seq_len X bsz X n_head X d_head
 
         # [qlen x klen x bsz x n_head]
-        attn_score = torch.einsum('ibnd,jbnd->ijbn', (head_q, head_k))
-        attn_score.mul_(self.scale)
+        attn_score = torch.einsum('ibnd,jbnd->ijbn', (head_q, head_k)) # einstein summation
+        attn_score.mul_(self.scale)                                    # scalar, in place multiplication
 
+        # mask out attention to future time
         if attn_mask is not None and attn_mask.any().item():
-            if attn_mask.dim() == 2:   attn_score.masked_fill_(attn_mask[None,:,:,None], -float('inf'))
-            elif attn_mask.dim() == 3: attn_score.masked_fill_(attn_mask[:,:,:,None],    -float('inf'))
+            if attn_mask.dim() == 2:   attn_score.masked_fill_(attn_mask[None,:,:,None],    -float('inf'))
+            elif attn_mask.dim() == 3: attn_score.masked_fill_(attn_mask[:,   :,:,None],    -float('inf'))
 
         # [qlen x klen x bsz x n_head]
         attn_prob = F.softmax(attn_score, dim=1)
         attn_prob = self.dropatt(attn_prob)
 
         # [qlen x klen x bsz x n_head] + [klen x bsz x n_head x d_head] -> [qlen x bsz x n_head x d_head]
-        attn_vec = torch.einsum('ijbn,jbnd->ibnd', (attn_prob, head_v))
+        attn_vec = torch.einsum('ijbn,jbnd->ibnd', (attn_prob, head_v)) # sum over all values
         attn_vec = attn_vec.contiguous().view(attn_vec.size(0), attn_vec.size(1), self.n_head * self.d_head)
 
-        ##### linear projection
+        # linear projection
         attn_out = self.o_net(attn_vec)
         attn_out = self.drop(attn_out)
 
-        if self.pre_lnorm:
-            ##### residual connection
-            output = h + attn_out
-        else:
-            ##### residual connection + layer normalization
-            output = self.layer_norm(h + attn_out)
+        if self.pre_lnorm: output = h + attn_out                  # residual connection
+        else:              output = self.layer_norm(h + attn_out) # residual connection + layer normalization
 
         return output
 
@@ -614,18 +612,21 @@ class MemTransformerLM(nn.Module):
 
         mlen = mems[0].size(0) if mems is not None else 0
         klen = mlen + qlen
+
         if self.same_length:
-            all_ones = word_emb.new_ones(qlen, klen)
-            mask_len = klen - self.mem_len
-            if mask_len > 0:
-                mask_shift_len = qlen - mask_len
-            else:
-                mask_shift_len = qlen
+            all_ones = word_emb.new_ones(qlen, klen) # all_ones of size qlen X klen of type word_emb
+            mask_len = klen - self.mem_len           # should be the same as qlen
+
+            if mask_len > 0: mask_shift_len = qlen - mask_len
+            else:            mask_shift_len = qlen
+
             dec_attn_mask = (torch.triu(all_ones, 1+mlen)
-                    + torch.tril(all_ones, -mask_shift_len)).byte()[:, :, None] # -1
+                            + torch.tril(all_ones, -mask_shift_len)).byte()[:, :, None] # -1
+
         else:
-            dec_attn_mask = torch.triu(
-                word_emb.new_ones(qlen, klen), diagonal=1+mlen).byte()[:,:,None]
+            # diagonal = 1 means make the main diagonal zero and start from above that. ==> for 1st time step self attn on input word only
+            # places where it is 1 will convert to -infinity
+            dec_attn_mask = torch.triu(word_emb.new_ones(qlen, klen), diagonal=1+mlen).byte()[:,:,None] # adding None makes this of size seq_len X seq_len X 1
 
         hids = []
         if self.attn_type == 0: # default
@@ -666,7 +667,8 @@ class MemTransformerLM(nn.Module):
             if self.clamp_len > 0: pos_seq.clamp_(max=self.clamp_len)
 
             pos_emb  = self.pos_emb(pos_seq)
-            core_out = self.drop(word_emb + pos_emb[-qlen:])
+            core_out = self.drop(word_emb + pos_emb[-qlen:]) # should be of size seq_len X bsz X emb_dim
+            pdb.set_trace()
 
             hids.append(core_out)
             for i, layer in enumerate(self.layers):
