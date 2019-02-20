@@ -14,6 +14,7 @@ class Vocab(object):
         self.delimiter  = delimiter         # split line by this delimiter
         self.vocab_file = vocab_file        # None
 
+
     def tokenize(self, line, add_eos=False, add_double_eos=False):
         line = line.strip()
         if self.lower_case: line = line.lower()
@@ -21,6 +22,8 @@ class Vocab(object):
         # None will make this go to else always
         if self.delimiter == '': symbols = line
         else:                    symbols = line.split(self.delimiter)
+
+        pdb.set_trace()
 
         if add_double_eos: return ['<S>'] + symbols + ['<S>']
         elif add_eos:      return symbols + ['<eos>']
@@ -31,7 +34,7 @@ class Vocab(object):
         Adds words in path file to the counter of the vocab obhject
         """
         if verbose: print('counting file {} ...'.format(path))      
-        assert os.path.exists(path)                                 # paht to train/dev/test file
+        assert os.path.exists(path), '{} not found'.format(path)                                 # paht to train/dev/test file
 
         sents = []
         with open(path, 'r', encoding='utf-8') as f:

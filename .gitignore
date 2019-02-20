@@ -1,5 +1,6 @@
 src/transformer-xl/LM*/
 data/*
+output/*
 cloned_repos/*
 # Byte-compiled / optimized / DLL files
 __pycache__/

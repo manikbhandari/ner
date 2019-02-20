@@ -508,7 +508,7 @@ class MemTransformerLM(nn.Module):
                 self.layers.append(RelLearnableDecoderLayer(n_head, d_model, d_head, d_inner, dropout, 
                                                             tgt_len=tgt_len, ext_len=ext_len, mem_len=mem_len, dropatt=dropatt, pre_lnorm=pre_lnorm) )
 
-        elif attn_type in [2, 3]: # absolute embeddings. 2 corresponds to original transformer. 3 is for Al-Rfou?
+        elif attn_type in [2, 3]: # absolute embeddings. 2 corresponds to original transformer. 3 is for Al-Rfou.
             for i in range(n_layer):
                 # d_inner is dimension of FFN (2100), n_head=10, d_model=410, d_head=41, d_inner=2100, drop=0.1, dropatt=0, pre_lnor=False
                 self.layers.append(DecoderLayer(n_head, d_model, d_head, d_inner, dropout, dropatt=dropatt, pre_lnorm=pre_lnorm)) 
