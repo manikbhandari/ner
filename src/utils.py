@@ -1,4 +1,4 @@
-import ipdb as pdb
+import pdb
 import os
 
 pdb_multi = '!import code; code.interact(local=vars())'

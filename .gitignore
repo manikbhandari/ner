@@ -1,5 +1,6 @@
 src/transformer-xl/LM*/
 data/*
+word_piece_data/*
 output/*
 cloned_repos/*
 # Byte-compiled / optimized / DLL files
