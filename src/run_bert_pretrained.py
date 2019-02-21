@@ -3,14 +3,12 @@ from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
 
-import argparse
-import collections
-import logging
-import json
-import re
-import pdb
+import argparse, collections, logging, json, re, pdb
+import utils
 
 import torch
+import torch.nn as nn
+import torch.nn.functional as F
 from torch.utils.data import TensorDataset, DataLoader, SequentialSampler
 from torch.utils.data.distributed import DistributedSampler
 
@@ -20,6 +18,17 @@ from pytorch_pretrained_bert.modeling import BertModel
 logging.basicConfig(format = '%(asctime)s - %(levelname)s - %(name)s -   %(message)s', datefmt = '%m/%d/%Y %H:%M:%S', level = logging.INFO)
 logger = logging.getLogger(__name__)
 
+
+class NERModel(torch.nn.Module):
+    def __init__(self, in_dim, dataset):
+        super(NERModel, self).__init__()
+        self.in_dim  = in_dim
+        self.lbl2id  = json.load(open('../data/{}/lbl2id.json'.format(dataset)))
+        self.linear  = torch.nn.Linear(in_dim, len(self.lbl2id))
+
+    def forward(self, bert_out):
+        out = F.softmax(self.linear(bert_out), dim=-1)
+        return out
 
 class InputExample(object):
 
@@ -40,16 +49,18 @@ class InputFeatures(object):
         self.input_type_ids = input_type_ids
 
 
-def convert_examples_to_features(examples, seq_length, tokenizer):
+def convert_examples_to_features(examples, seq_length, tokenizer, tokenize=True):
     """Loads a data file into a list of `InputBatch`s."""
 
     features = []
     for (ex_index, example) in enumerate(examples):
-        tokens_a = tokenizer.tokenize(example.text_a)
+        if not tokenize: tokens_a = example.text_a
+        else:            tokens_a = tokenizer.tokenize(example.text_a)
 
         tokens_b = None
         if example.text_b:
-            tokens_b = tokenizer.tokenize(example.text_b)
+            if not tokenize: tokens_b = example.text_b
+            else:            tokens_b = tokenizer.tokenize(example.text_b)
 
         if tokens_b:
             # Modifies `tokens_a` and `tokens_b` in place so that the total
@@ -151,14 +162,81 @@ def read_examples(input_file):
             unique_id += 1
     return examples
 
+def read_labels(lbl_file, lbl2id, max_seq_length):
+    all_labels = utils.read(lbl_file)
+    final_labels = []
+
+    for line in all_labels:
+        final_line = []
+        line = line.split()
+        while(len(line) > max_seq_length): line.pop()
+        while(len(line) < max_seq_length): line.append('None')
+        for el in line: 
+            final_line.append(lbl2id[el])
+
+        final_labels.append(final_line)
+
+    return torch.tensor(final_labels, dtype=torch.long)
+
+def read_mask(mask_file, max_seq_length):
+    all_masks = utils.read(mask_file)
+    final_masks = []
+
+    for line in all_masks:
+        line = line.split()
+        line = [int(el) for el in line]
+        while(len(line) > max_seq_length): line.pop()
+        while(len(line) < max_seq_length): line.append(0)
+        final_masks.append(line)
+
+    return torch.tensor(final_masks, dtype=torch.long)
+
+def train_ner(ner_model, model, args, tokenizer):
+
+    examples = read_examples('../word_piece_data/{}/train/in.txt'.format(args.dataset))
+
+    features = convert_examples_to_features(examples=examples, seq_length=args.max_seq_length, tokenizer=tokenizer)
+
+    all_input_ids       = torch.tensor([f.input_ids for f in features],  dtype=torch.long)
+    all_input_mask      = torch.tensor([f.input_mask for f in features], dtype=torch.long)
+    all_example_index   = torch.arange(all_input_ids.size(0),            dtype=torch.long)
+
+    all_labels   = read_labels('../word_piece_data/{}/train/out_lbl.txt'.format(args.dataset), ner_model.lbl2id, args.max_seq_length)
+    all_lbl_mask = read_mask('../word_piece_data/{}/train/out_mask.txt'.format(args.dataset), args.max_seq_length)
+
+    eval_data = TensorDataset(all_input_ids, all_input_mask, all_example_index)
+    if args.local_rank == -1: eval_sampler = SequentialSampler(eval_data) # samples in order
+    else:                     eval_sampler = DistributedSampler(eval_data)
+    eval_dataloader = DataLoader(eval_data, sampler=eval_sampler, batch_size=args.batch_size)
+
+    lr      = args.lr
+    loss_fn = torch.nn.CrossEntropyLoss()
+    optim   = torch.optim.Adam(ner_model.parameters(), lr=lr)
+
+
+    for input_ids, input_mask, example_indices in eval_dataloader:
+        
+        input_ids  = input_ids.to(args.device)
+        input_mask = input_mask.to(args.device)
+
+        all_encoder_layers, _ = model(input_ids, token_type_ids=None, attention_mask=input_mask)
+
+        bert_out = all_encoder_layers[-1] # bs X seq_len X dim
+
+        y_pred = ner_model(bert_out) # bs X seq_len X len(lbl2id)
+        pdb.set_trace()
+
+        loss   = loss_fn()
+
 
 def main():
     parser = argparse.ArgumentParser()
 
     ## Required parameters
-    parser.add_argument("--input_file",  default=None, type=str, required=True)
-    parser.add_argument("--output_file", default=None, type=str, required=True)
-    parser.add_argument("--bert_model",  default=None, type=str, required=True, help="Bert pre-trained model selected in the list: bert-base-uncased, "
+    # parser.add_argument("--input_file",  default=None, type=str, required=True)
+    # parser.add_argument("--output_file", default=None, type=str, required=True)
+    parser.add_argument("--dataset",     default='BC5CDR', type=str)
+    parser.add_argument("--bert_model",  default='bert-base-cased', type=str, help="Bert pre-trained model selected in the list: bert-base-uncased, "
                                                                                      "bert-large-uncased, bert-base-cased, bert-base-multilingual, bert-base-chinese.")
 
     ## Other parameters
@@ -171,30 +249,26 @@ def main():
     parser.add_argument("--local_rank", default=-1,         type=int, help = "local_rank for distributed training on gpus")
     parser.add_argument("--no_cuda",    action='store_true',          help="Whether not to use CUDA when available")
 
+    parser.add_argument("--emb_dim",    default=768,        type=int,   help = "embedding dimension of BERT")
+    parser.add_argument("--lr",         default=0.001,      type=float, help = "embedding dimension of BERT")
+
     args = parser.parse_args()
 
     if args.local_rank == -1 or args.no_cuda:
-        device = torch.device("cuda" if torch.cuda.is_available() and not args.no_cuda else "cpu")
+        args.device = torch.device("cuda" if torch.cuda.is_available() and not args.no_cuda else "cpu")
         n_gpu = torch.cuda.device_count()
     else:
-        device = torch.device("cuda", args.local_rank)
+        args.device = torch.device("cuda", args.local_rank)
         n_gpu = 1
         torch.distributed.init_process_group(backend='nccl')
 
-    logger.info("device: {} n_gpu: {} distributed training: {}".format(device, n_gpu, bool(args.local_rank != -1)))
+    logger.info("device: {} n_gpu: {} distributed training: {}".format(args.device, n_gpu, bool(args.local_rank != -1)))
 
     layer_indexes = [int(x) for x in args.layers.split(",")] # like -1, -2, -3, -4
     tokenizer     = BertTokenizer.from_pretrained(args.bert_model, do_lower_case=args.do_lower_case)
 
-    examples      = read_examples(args.input_file)
-    features      = convert_examples_to_features(examples=examples, seq_length=args.max_seq_length, tokenizer=tokenizer)
-
-    unique_id_to_feature = {}
-    for feature in features:
-        unique_id_to_feature[feature.unique_id] = feature
-
     model = BertModel.from_pretrained(args.bert_model)
-    model.to(device)
+    model.to(args.device)
 
     if args.local_rank != -1:
         model = torch.nn.parallel.DistributedDataParallel(model, device_ids=[args.local_rank],
@@ -202,56 +276,13 @@ def main():
     elif n_gpu > 1:
         model = torch.nn.DataParallel(model)
 
-    all_input_ids       = torch.tensor([f.input_ids for f in features],  dtype=torch.long)
-    all_input_mask      = torch.tensor([f.input_mask for f in features], dtype=torch.long)
-    all_example_index   = torch.arange(all_input_ids.size(0),            dtype=torch.long)
-
-    eval_data = TensorDataset(all_input_ids, all_input_mask, all_example_index)
-    if args.local_rank == -1:
-        eval_sampler = SequentialSampler(eval_data) # samples in order
-    else:
-        eval_sampler = DistributedSampler(eval_data)
-    eval_dataloader = DataLoader(eval_data, sampler=eval_sampler, batch_size=args.batch_size)
-
     model.eval()
-    with open(args.output_file, "w", encoding='utf-8') as writer:
 
-        for input_ids, input_mask, example_indices in eval_dataloader:
-            
-            input_ids  = input_ids.to(device)
-            input_mask = input_mask.to(device)
+    ner_model = NERModel(args.emb_dim, args.dataset)
+    ner_model.to(args.device)
 
-            all_encoder_layers, _ = model(input_ids, token_type_ids=None, attention_mask=input_mask)
-            all_encoder_layers = all_encoder_layers
+    train_ner(ner_model, model, args, tokenizer)
 
-            pdb.set_trace()
-
-            for b, example_index in enumerate(example_indices):
-                feature   = features[example_index.item()]
-                unique_id = int(feature.unique_id)
-
-                # feature = unique_id_to_feature[unique_id]
-                output_json                = collections.OrderedDict()
-                output_json["linex_index"] = unique_id
-
-                all_out_features = []
-                for (i, token) in enumerate(feature.tokens):
-                    all_layers = []
-
-                    for (j, layer_index) in enumerate(layer_indexes):
-                        layer_output        = all_encoder_layers[int(layer_index)].detach().cpu().numpy()
-                        layer_output        = layer_output[b]
-                        layers              = collections.OrderedDict()
-                        layers["index"]     = layer_index
-                        layers["values"]    = [round(x.item(), 6) for x in layer_output[i] 
-                        ]
-                        all_layers.append(layers)
-                    out_features = collections.OrderedDict()
-                    out_features["token"] = token
-                    out_features["layers"] = all_layers
-                    all_out_features.append(out_features)
-                output_json["features"] = all_out_features
-                writer.write(json.dumps(output_json) + "\n")
 
 
 if __name__ == "__main__":

@@ -39,7 +39,7 @@ def convert_file(fname, lbl_fname, tokenizer):
 	assert all([len(mask) == len(lbl) for mask, lbl in zip(lbl_mask, labels)])
 
 	sents = [' '.join(sent) for sent in sents]
-	labels = [' '.join(lbl) for lbl in sents]
+	labels = [' '.join(lbl) for lbl in labels]
 	lbl_mask = [' '.join([str(m) for m in mask]) for mask in lbl_mask]
 
 
