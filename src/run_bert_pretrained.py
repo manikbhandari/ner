@@ -237,7 +237,7 @@ def train_ner(ner_model, model, args, tokenizer, epoch):
 
 
         prec, rec, f1 = metrics(y_pred, labels, lbl_mask, ner_model.lbl2id)
-        logger.info("TRAINING: e: b: {} NER loss: {:.5f} prec: {:.5f} rec: {:.5f} f1: {:.5f}".format(
+        logger.info("TRAINING: e: {} b: {} NER loss: {:.5f} prec: {:.5f} rec: {:.5f} f1: {:.5f}".format(
                             epoch, batch_num, masked_loss, prec, rec, f1))
 
         masked_loss.backward()
