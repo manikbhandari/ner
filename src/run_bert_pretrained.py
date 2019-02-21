@@ -28,7 +28,7 @@ class NERModel(torch.nn.Module):
         self.linear  = torch.nn.Linear(in_dim, len(self.lbl2id))
 
     def forward(self, bert_out):
-        out = F.softmax(self.linear(bert_out), dim=-1)
+        out = self.linear(bert_out)
         return out
 
 class InputExample(object):
@@ -197,7 +197,7 @@ def metrics(y_pred, y_true, masks, lbl2id):
     rec  = (true_pos + EPS) / (true_pos + false_neg + EPS)
     f1   = (2 * prec * rec + EPS) / (prec + rec + EPS)
 
-    return prec, rec, f1
+    return prec, rec, f1, true_pos, false_pos, false_neg
 
 
 def train_ner(ner_model, model, args, tokenizer, epoch):
@@ -236,9 +236,9 @@ def train_ner(ner_model, model, args, tokenizer, epoch):
         masked_loss = torch.sum(loss * lbl_mask.to(args.device))
 
 
-        prec, rec, f1 = metrics(y_pred, labels, lbl_mask, ner_model.lbl2id)
-        logger.info("TRAINING: e: {} b: {} NER loss: {:.5f} prec: {:.5f} rec: {:.5f} f1: {:.5f}".format(
-                            epoch, batch_num, masked_loss, prec, rec, f1))
+        prec, rec, f1, tp, fp, fn = metrics(y_pred, labels, lbl_mask, ner_model.lbl2id)
+        logger.info("TRAIN: e: {} b: {} NER loss: {:.5f} prec: {:.5f} rec: {:.5f} f1: {:.5f} tp: {} fp: {} fn: {}".format(
+                            epoch, batch_num, masked_loss, prec, rec, f1, tp, fp, fn))
 
         masked_loss.backward()
         optim.step()
@@ -260,7 +260,7 @@ def main():
     parser.add_argument("--no_cuda",    action='store_true',                  help="Whether not to use CUDA when available")
 
     parser.add_argument("--emb_dim",    default=768,        type=int,         help = "embedding dimension of BERT")
-    parser.add_argument("--lr",         default=0.001,      type=float,       help = "embedding dimension of BERT")
+    parser.add_argument("--lr",         default=0.001,      type=float,       help = "learning rate of final layer")
 
     args = parser.parse_args()
 
