@@ -15,8 +15,15 @@ from torch.utils.data.distributed import DistributedSampler
 from pytorch_pretrained_bert.tokenization import BertTokenizer
 from pytorch_pretrained_bert.modeling import BertModel
 
-logging.basicConfig(format = '%(asctime)s - %(levelname)s - %(name)s -   %(message)s', datefmt = '%m/%d/%Y %H:%M:%S', level = logging.INFO)
+logging.basicConfig(format = '%(asctime)s - %(levelname)s - %(name)s -   %(message)s', datefmt = '%m/%d/%Y %H:%M:%S', level = logging.INFO,
+                    filename='bert_pretrained.log', filemode='w')
+console = logging.StreamHandler()
+console.setLevel(logging.INFO)
+formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(name)s -   %(message)s')
+console.setFormatter(formatter)
+
 logger = logging.getLogger(__name__)
+logger.addHandler(console)
 
 EPS = 1e-9
 
@@ -243,6 +250,52 @@ def train_ner(ner_model, model, args, tokenizer, epoch):
         masked_loss.backward()
         optim.step()
 
+def evaluate_ner(ner_model, model, args, tokenizer, epoch, split):
+    examples = read_examples('../word_piece_data/{}/{}/in.txt'.format(args.dataset, split))
+    features = convert_examples_to_features(examples=examples, seq_length=args.max_seq_length, tokenizer=tokenizer,
+                                            label_file='../word_piece_data/{}/{}/out_lbl.txt'.format(args.dataset, split),
+                                            label_mask_file='../word_piece_data/{}/{}/out_mask.txt'.format(args.dataset, split),
+                                            lbl2id=ner_model.lbl2id)
+
+    all_input_ids       = torch.tensor([f.input_ids for f in features],  dtype=torch.long)
+    all_input_mask      = torch.tensor([f.input_mask for f in features], dtype=torch.long)
+    all_example_index   = torch.arange(all_input_ids.size(0),            dtype=torch.long)
+    all_labels          = torch.tensor([f.lbl_ids for f in features],     dtype=torch.long)
+    all_label_masks     = torch.tensor([f.lbl_mask for f in features],   dtype=torch.float)
+
+    eval_data = TensorDataset(all_input_ids, all_input_mask, all_example_index, all_labels, all_label_masks)
+    if args.local_rank == -1: eval_sampler = SequentialSampler(eval_data) # samples in order
+    else:                     eval_sampler = DistributedSampler(eval_data)
+    eval_dataloader = DataLoader(eval_data, sampler=eval_sampler, batch_size=args.batch_size)
+
+
+    total_tp, total_fp, total_fn = 0, 0, 0
+    for batch_num, (input_ids, input_mask, example_indices, labels, lbl_mask) in enumerate(eval_dataloader):
+        
+        input_ids  = input_ids.to(args.device)
+        input_mask = input_mask.to(args.device)
+
+        all_encoder_layers, _ = model(input_ids, token_type_ids=None, attention_mask=input_mask)
+
+        bert_out    = all_encoder_layers[-1] # bs X seq_len X dim
+        y_pred      = ner_model(bert_out) # bs X seq_len X len(lbl2id)
+
+        prec, rec, f1, tp, fp, fn = metrics(y_pred, labels, lbl_mask, ner_model.lbl2id)
+        logger.info("{}: e: {} b: {} prec: {:.5f} rec: {:.5f} f1: {:.5f} tp: {} fp: {} fn: {}".format(
+                            split, epoch, batch_num, prec, rec, f1, tp, fp, fn))
+        total_tp += tp
+        total_fp += fp
+        total_fn += fn
+
+    prec = (total_tp + EPS) / (total_tp + total_fp + EPS)
+    rec  = (total_tp + EPS) / (total_tp + total_fn + EPS)
+    f1   = (2 * prec * rec + EPS) / (prec + rec + EPS)
+    logger.info("{} results: TP: {} FP: {} FN: {} prec: {} rec: {} f1: {}".format(split, total_tp, total_fp, total_fn, prec, rec, f1))
+
+    return f1
+
+
+
 def main():
     parser = argparse.ArgumentParser()
 
@@ -289,8 +342,12 @@ def main():
     ner_model = NERModel(args.emb_dim, args.dataset)
     ner_model.to(args.device)
 
+    best_f1 = 0
     for epoch in range(args.epochs):
         train_ner(ner_model, model, args, tokenizer, epoch)
+        f1 = evaluate_ner(ner_model, model, args, tokenizer, epoch, 'dev')
+        if f1 > best_f1:
+            best_f1 = evaluate_ner(ner_model, model, args, tokenizer, epoch, 'test')
 
 if __name__ == "__main__":
     main()
