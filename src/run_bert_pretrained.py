@@ -3,7 +3,7 @@ from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
 
-import argparse, collections, logging, json, re, pdb
+import argparse, collections, logging, json, re, pdb, numpy as np
 import utils
 
 import torch
@@ -18,6 +18,7 @@ from pytorch_pretrained_bert.modeling import BertModel
 logging.basicConfig(format = '%(asctime)s - %(levelname)s - %(name)s -   %(message)s', datefmt = '%m/%d/%Y %H:%M:%S', level = logging.INFO)
 logger = logging.getLogger(__name__)
 
+EPS = 1e-9
 
 class NERModel(torch.nn.Module):
     def __init__(self, in_dim, dataset):
@@ -41,21 +42,30 @@ class InputExample(object):
 class InputFeatures(object):
     """A single set of features of data."""
 
-    def __init__(self, unique_id, tokens, input_ids, input_mask, input_type_ids):
+    def __init__(self, unique_id, tokens, input_ids, input_mask, input_type_ids, labels, lbl_ids, lbl_mask):
         self.unique_id      = unique_id
         self.tokens         = tokens
         self.input_ids      = input_ids
         self.input_mask     = input_mask
         self.input_type_ids = input_type_ids
+        self.labels         = labels
+        self.lbl_ids         = lbl_ids
+        self.lbl_mask       = lbl_mask
 
 
-def convert_examples_to_features(examples, seq_length, tokenizer, tokenize=True):
+def convert_examples_to_features(examples, seq_length, tokenizer, label_file, label_mask_file, lbl2id, tokenize=True):
     """Loads a data file into a list of `InputBatch`s."""
 
+    labels   = utils.read(label_file)
+    lbl_mask = utils.read(label_mask_file)
     features = []
     for (ex_index, example) in enumerate(examples):
         if not tokenize: tokens_a = example.text_a
         else:            tokens_a = tokenizer.tokenize(example.text_a)
+
+        labels_a   = labels[ex_index].split()
+        lbl_mask_a = lbl_mask[ex_index].split()
+        assert len(tokens_a) == len(labels_a)
 
         tokens_b = None
         if example.text_b:
@@ -63,34 +73,37 @@ def convert_examples_to_features(examples, seq_length, tokenizer, tokenize=True)
             else:            tokens_b = tokenizer.tokenize(example.text_b)
 
         if tokens_b:
-            # Modifies `tokens_a` and `tokens_b` in place so that the total
-            # length is less than the specified length.
-            # Account for [CLS], [SEP], [SEP] with "- 3"
             _truncate_seq_pair(tokens_a, tokens_b, seq_length - 3)
         else:
             # Account for [CLS] and [SEP] with "- 2"
             if len(tokens_a) > seq_length - 2:
                 tokens_a = tokens_a[0:(seq_length - 2)]
+                labels_a = labels_a[0:(seq_length - 2)]
+                lbl_mask_a = lbl_mask_a[0:(seq_length - 2)]
 
-        # The convention in BERT is:
-        # (a) For sequence pairs:
-        #  tokens:   [CLS] is this jack ##son ##ville ? [SEP] no it is not . [SEP]
-        #  type_ids:   0   0  0    0    0     0      0   0    1  1  1   1  1   1
-        # (b) For single sequences:
         #  tokens:   [CLS] the dog is hairy . [SEP]
         #  type_ids:   0   0   0   0  0     0   0
 
-        tokens         = []
-        input_type_ids = []
-        tokens.append("[CLS]")
+        tokens          = []
+        final_labels    = []
+        final_lbl_masks = []
+        input_type_ids  = []
 
+        tokens.append("[CLS]")
+        final_labels.append('None')
         input_type_ids.append(0)
-        for token in tokens_a:
+        final_lbl_masks.append(0)
+
+        for i, token in enumerate(tokens_a):
             tokens.append(token)
             input_type_ids.append(0)
+            final_labels.append(labels_a[i])
+            final_lbl_masks.append(int(lbl_mask_a[i]))
 
         tokens.append("[SEP]")
         input_type_ids.append(0)
+        final_labels.append('None')
+        final_lbl_masks.append(0)
 
         if tokens_b:
             for token in tokens_b:
@@ -110,21 +123,28 @@ def convert_examples_to_features(examples, seq_length, tokenizer, tokenize=True)
             input_ids.append(0)
             input_mask.append(0)
             input_type_ids.append(0)
+            final_labels.append('None')
+            final_lbl_masks.append(0)
 
         assert len(input_ids)       == seq_length
         assert len(input_mask)      == seq_length
         assert len(input_type_ids)  == seq_length
+        assert len(final_labels)    == seq_length
+        assert len(final_lbl_masks) == seq_length
 
         if ex_index < 5: # display first 5 examples
             logger.info("*** Example ***")
             logger.info("unique_id: %s" % (example.unique_id))
             logger.info("tokens: %s" % " ".join([str(x) for x in tokens]))
+            logger.info("labels: %s" % " ".join([str(x) for x in final_labels]))
+            logger.info("labal masks: %s" % " ".join([str(x) for x in final_lbl_masks]))
             logger.info("input_ids: %s" % " ".join([str(x) for x in input_ids]))
             logger.info("input_mask: %s" % " ".join([str(x) for x in input_mask]))
             logger.info("input_type_ids: %s" % " ".join([str(x) for x in input_type_ids]))
 
         features.append(InputFeatures(unique_id=example.unique_id, tokens=tokens, input_ids=input_ids, 
-                                      input_mask=input_mask, input_type_ids=input_type_ids))
+                                      input_mask=input_mask, input_type_ids=input_type_ids, labels=final_labels, 
+                                      lbl_mask=final_lbl_masks, lbl_ids=[lbl2id[lbl] for lbl in final_labels]))
 
     return features
 
@@ -162,95 +182,85 @@ def read_examples(input_file):
             unique_id += 1
     return examples
 
-def read_labels(lbl_file, lbl2id, max_seq_length):
-    all_labels = utils.read(lbl_file)
-    final_labels = []
+def metrics(y_pred, y_true, masks, lbl2id):
+    preds = np.argmax(y_pred.cpu().detach().numpy(), axis=-1).flatten() 
+    acts  = y_true.numpy().flatten()
+    masks = masks.flatten()
 
-    for line in all_labels:
-        final_line = []
-        line = line.split()
-        while(len(line) > max_seq_length): line.pop()
-        while(len(line) < max_seq_length): line.append('None')
-        for el in line: 
-            final_line.append(lbl2id[el])
+    assert preds.shape == acts.shape
 
-        final_labels.append(final_line)
+    true_pos  = np.sum([(pred == act) and (pred != lbl2id['None']) and (mask == 1) for pred, act, mask in zip(preds, acts, masks)]) # true and positive
+    false_pos = np.sum([(pred != act) and (pred != lbl2id['None']) and (mask == 1) for pred, act, mask in zip(preds, acts, masks)]) # true and negative
+    false_neg = np.sum([(pred != act) and (pred == lbl2id['None']) and (mask == 1) for pred, act, mask in zip(preds, acts, masks)])   # false and negative
 
-    return torch.tensor(final_labels, dtype=torch.long)
+    prec = (true_pos + EPS) / (true_pos + false_pos + EPS)
+    rec  = (true_pos + EPS) / (true_pos + false_neg + EPS)
+    f1   = (2 * prec * rec + EPS) / (prec + rec + EPS)
 
-def read_mask(mask_file, max_seq_length):
-    all_masks = utils.read(mask_file)
-    final_masks = []
+    return prec, rec, f1
 
-    for line in all_masks:
-        line = line.split()
-        line = [int(el) for el in line]
-        while(len(line) > max_seq_length): line.pop()
-        while(len(line) < max_seq_length): line.append(0)
-        final_masks.append(line)
 
-    return torch.tensor(final_masks, dtype=torch.long)
-
-def train_ner(ner_model, model, args, tokenizer):
+def train_ner(ner_model, model, args, tokenizer, epoch):
 
     examples = read_examples('../word_piece_data/{}/train/in.txt'.format(args.dataset))
-
-    features = convert_examples_to_features(examples=examples, seq_length=args.max_seq_length, tokenizer=tokenizer)
+    features = convert_examples_to_features(examples=examples, seq_length=args.max_seq_length, tokenizer=tokenizer,
+                                            label_file='../word_piece_data/{}/train/out_lbl.txt'.format(args.dataset),
+                                            label_mask_file='../word_piece_data/{}/train/out_mask.txt'.format(args.dataset),
+                                            lbl2id=ner_model.lbl2id)
 
     all_input_ids       = torch.tensor([f.input_ids for f in features],  dtype=torch.long)
     all_input_mask      = torch.tensor([f.input_mask for f in features], dtype=torch.long)
     all_example_index   = torch.arange(all_input_ids.size(0),            dtype=torch.long)
+    all_labels          = torch.tensor([f.lbl_ids for f in features],     dtype=torch.long)
+    all_label_masks     = torch.tensor([f.lbl_mask for f in features],   dtype=torch.float)
 
-    all_labels   = read_labels('../word_piece_data/{}/train/out_lbl.txt'.format(args.dataset), ner_model.lbl2id, args.max_seq_length)
-    all_lbl_mask = read_mask('../word_piece_data/{}/train/out_mask.txt'.format(args.dataset), args.max_seq_length)
-
-    eval_data = TensorDataset(all_input_ids, all_input_mask, all_example_index)
+    eval_data = TensorDataset(all_input_ids, all_input_mask, all_example_index, all_labels, all_label_masks)
     if args.local_rank == -1: eval_sampler = SequentialSampler(eval_data) # samples in order
     else:                     eval_sampler = DistributedSampler(eval_data)
     eval_dataloader = DataLoader(eval_data, sampler=eval_sampler, batch_size=args.batch_size)
 
     lr      = args.lr
-    loss_fn = torch.nn.CrossEntropyLoss()
+    loss_fn = torch.nn.CrossEntropyLoss(reduction='none')
     optim   = torch.optim.Adam(ner_model.parameters(), lr=lr)
 
-
-    for input_ids, input_mask, example_indices in eval_dataloader:
+    for batch_num, (input_ids, input_mask, example_indices, labels, lbl_mask) in enumerate(eval_dataloader):
         
         input_ids  = input_ids.to(args.device)
         input_mask = input_mask.to(args.device)
 
         all_encoder_layers, _ = model(input_ids, token_type_ids=None, attention_mask=input_mask)
 
-        bert_out = all_encoder_layers[-1] # bs X seq_len X dim
+        bert_out    = all_encoder_layers[-1] # bs X seq_len X dim
+        y_pred      = ner_model(bert_out) # bs X seq_len X len(lbl2id)
+        loss        = loss_fn(y_pred.transpose(1, 2), labels.to(args.device))
+        masked_loss = torch.sum(loss * lbl_mask.to(args.device))
 
-        y_pred = ner_model(bert_out) # bs X seq_len X len(lbl2id)
-        pdb.set_trace()
 
-        loss   = loss_fn()
+        prec, rec, f1 = metrics(y_pred, labels, lbl_mask, ner_model.lbl2id)
+        logger.info("TRAINING: e: b: {} NER loss: {:.5f} prec: {:.5f} rec: {:.5f} f1: {:.5f}".format(
+                            epoch, batch_num, masked_loss, prec, rec, f1))
 
+        masked_loss.backward()
+        optim.step()
 
 def main():
     parser = argparse.ArgumentParser()
 
-    ## Required parameters
-    # parser.add_argument("--input_file",  default=None, type=str, required=True)
-    # parser.add_argument("--output_file", default=None, type=str, required=True)
     parser.add_argument("--dataset",     default='BC5CDR', type=str)
     parser.add_argument("--bert_model",  default='bert-base-cased', type=str, help="Bert pre-trained model selected in the list: bert-base-uncased, "
                                                                                      "bert-large-uncased, bert-base-cased, bert-base-multilingual, bert-base-chinese.")
 
-    ## Other parameters
-    parser.add_argument("--do_lower_case",  action='store_true',   help="Set this flag if you are using an uncased model.")
-    parser.add_argument("--layers",         default="-1,-2,-3,-4", type=str)
-    parser.add_argument("--max_seq_length", default=128,           type=int, help="The maximum total input sequence length after WordPiece tokenization. Sequences longer "
+    parser.add_argument("--do_lower_case",  action='store_true',              help="Set this flag if you are using an uncased model.")
+    parser.add_argument("--max_seq_length", default=128,           type=int,  help="The maximum total input sequence length after WordPiece tokenization. Sequences longer "
                                                                                     "than this will be truncated, and sequences shorter than this will be padded.")
 
-    parser.add_argument("--batch_size", default=32,         type=int, help="Batch size for predictions.")
-    parser.add_argument("--local_rank", default=-1,         type=int, help = "local_rank for distributed training on gpus")
-    parser.add_argument("--no_cuda",    action='store_true',          help="Whether not to use CUDA when available")
+    parser.add_argument("--batch_size", default=32,         type=int,         help="Batch size for predictions.")
+    parser.add_argument("--epochs",     default=10,          type=int,         help="number of epochs")
+    parser.add_argument("--local_rank", default=-1,         type=int,         help="local_rank for distributed training on gpus")
+    parser.add_argument("--no_cuda",    action='store_true',                  help="Whether not to use CUDA when available")
 
-    parser.add_argument("--emb_dim",    default=768,        type=int,   help = "embedding dimension of BERT")
-    parser.add_argument("--lr",         default=0.001,      type=float, help = "embedding dimension of BERT")
+    parser.add_argument("--emb_dim",    default=768,        type=int,         help = "embedding dimension of BERT")
+    parser.add_argument("--lr",         default=0.001,      type=float,       help = "embedding dimension of BERT")
 
     args = parser.parse_args()
 
@@ -264,15 +274,13 @@ def main():
 
     logger.info("device: {} n_gpu: {} distributed training: {}".format(args.device, n_gpu, bool(args.local_rank != -1)))
 
-    layer_indexes = [int(x) for x in args.layers.split(",")] # like -1, -2, -3, -4
     tokenizer     = BertTokenizer.from_pretrained(args.bert_model, do_lower_case=args.do_lower_case)
 
     model = BertModel.from_pretrained(args.bert_model)
     model.to(args.device)
 
     if args.local_rank != -1:
-        model = torch.nn.parallel.DistributedDataParallel(model, device_ids=[args.local_rank],
-                                                          output_device=args.local_rank)
+        model = torch.nn.parallel.DistributedDataParallel(model, device_ids=[args.local_rank], output_device=args.local_rank)
     elif n_gpu > 1:
         model = torch.nn.DataParallel(model)
 
@@ -281,9 +289,8 @@ def main():
     ner_model = NERModel(args.emb_dim, args.dataset)
     ner_model.to(args.device)
 
-    train_ner(ner_model, model, args, tokenizer)
-
-
+    for epoch in range(args.epochs):
+        train_ner(ner_model, model, args, tokenizer, epoch)
 
 if __name__ == "__main__":
     main()
