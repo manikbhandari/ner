@@ -3,7 +3,7 @@ from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
 
-import argparse, collections, logging, json, re, pdb, numpy as np
+import argparse, collections, logging, json, re, pdb, numpy as np, time
 import utils
 
 import torch
@@ -16,7 +16,7 @@ from pytorch_pretrained_bert.tokenization import BertTokenizer
 from pytorch_pretrained_bert.modeling import BertModel
 
 logging.basicConfig(format = '%(asctime)s - %(levelname)s - %(name)s -   %(message)s', datefmt = '%m/%d/%Y %H:%M:%S', level = logging.INFO,
-                    filename='bert_pretrained.log', filemode='w')
+                    filename='logs/bert_pretrained_{}.log'.format(time.strftime("%Y_%m_%d_%H_%M_%S", time.localtime())), filemode='a')
 console = logging.StreamHandler()
 console.setLevel(logging.INFO)
 formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(name)s -   %(message)s')
@@ -307,8 +307,8 @@ def main():
     parser.add_argument("--max_seq_length", default=128,           type=int,  help="The maximum total input sequence length after WordPiece tokenization. Sequences longer "
                                                                                     "than this will be truncated, and sequences shorter than this will be padded.")
 
-    parser.add_argument("--batch_size", default=32,         type=int,         help="Batch size for predictions.")
-    parser.add_argument("--epochs",     default=10,          type=int,         help="number of epochs")
+    parser.add_argument("--batch_size", default=4,         type=int,         help="Batch size for predictions.")
+    parser.add_argument("--epochs",     default=100,          type=int,         help="number of epochs")
     parser.add_argument("--local_rank", default=-1,         type=int,         help="local_rank for distributed training on gpus")
     parser.add_argument("--no_cuda",    action='store_true',                  help="Whether not to use CUDA when available")
 
@@ -316,6 +316,8 @@ def main():
     parser.add_argument("--lr",         default=0.001,      type=float,       help = "learning rate of final layer")
 
     args = parser.parse_args()
+
+    logger.info(vars(args))
 
     if args.local_rank == -1 or args.no_cuda:
         args.device = torch.device("cuda" if torch.cuda.is_available() and not args.no_cuda else "cpu")
