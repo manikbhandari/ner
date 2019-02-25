@@ -47,18 +47,18 @@ EPS = 1e-9
 
 class BERTDataset(Dataset):
     def __init__(self, corpus_path, tokenizer, seq_len, encoding="utf-8", corpus_lines=None, on_memory=True):
-        self.vocab = tokenizer.vocab
-        self.tokenizer = tokenizer
-        self.seq_len = seq_len
-        self.on_memory = on_memory
+        self.vocab        = tokenizer.vocab
+        self.tokenizer    = tokenizer
+        self.seq_len      = seq_len
+        self.on_memory    = on_memory
         self.corpus_lines = corpus_lines  # number of non-empty lines in input corpus
-        self.corpus_path = corpus_path
-        self.encoding = encoding
-        self.current_doc = 0  # to avoid random sentence from same doc
+        self.corpus_path  = corpus_path
+        self.encoding     = encoding
+        self.current_doc  = 0  # to avoid random sentence from same doc
 
         # for loading samples directly from file
         self.sample_counter = 0  # used to keep track of full epochs on file
-        self.line_buffer = None  # keep second sentence of a pair in memory and use as first sentence in next pair
+        self.line_buffer    = None  # keep second sentence of a pair in memory and use as first sentence in next pair
 
         # for loading samples in memory
         self.current_random_doc = 0
@@ -210,8 +210,8 @@ class BERTDataset(Dataset):
         for _ in range(10):
             if self.on_memory:
                 rand_doc_idx = random.randint(0, len(self.all_docs)-1)
-                rand_doc = self.all_docs[rand_doc_idx]
-                line = rand_doc[random.randrange(len(rand_doc))]
+                rand_doc     = self.all_docs[rand_doc_idx]
+                line         = rand_doc[random.randrange(len(rand_doc))]
             else:
                 rand_index = random.randint(1, self.corpus_lines if self.corpus_lines < 1000 else 1000)
                 #pick random line
@@ -233,7 +233,7 @@ class BERTDataset(Dataset):
         except StopIteration:
             self.random_file.close()
             self.random_file = open(self.corpus_path, "r", encoding=self.encoding)
-            line = next(self.random_file).strip()
+            line             = next(self.random_file).strip()
         return line
 
 
@@ -348,8 +348,9 @@ def convert_example_to_features(example, max_seq_length, tokenizer):
     # For classification tasks, the first vector (corresponding to [CLS]) is
     # used as as the "sentence vector". Note that this only makes sense because
     # the entire model is fine-tuned.
-    tokens = []
+    tokens      = []
     segment_ids = []
+
     tokens.append("[CLS]")
     segment_ids.append(0)
     for token in tokens_a:
@@ -385,23 +386,20 @@ def convert_example_to_features(example, max_seq_length, tokenizer):
 
     if example.guid < 5:
         logger.info("*** Example ***")
-        logger.info("guid: %s" % (example.guid))
-        logger.info("tokens: %s" % " ".join(
-                [str(x) for x in tokens]))
-        logger.info("input_ids: %s" % " ".join([str(x) for x in input_ids]))
-        logger.info("input_mask: %s" % " ".join([str(x) for x in input_mask]))
-        logger.info(
-                "segment_ids: %s" % " ".join([str(x) for x in segment_ids]))
-        logger.info("LM label: %s " % (lm_label_ids))
+        logger.info("guid:                   %s" % (example.guid))
+        logger.info("tokens:                 %s" % " ".join( [str(x) for x in tokens]))
+        logger.info("input_ids:              %s" % " ".join([str(x) for x in input_ids]))
+        logger.info("input_mask:             %s" % " ".join([str(x) for x in input_mask]))
+        logger.info( "segment_ids:           %s" % " ".join([str(x) for x in segment_ids]))
+        logger.info("LM label:               %s " % (lm_label_ids))
         logger.info("Is next sentence label: %s " % (example.is_next))
 
-    features = InputFeatures(input_ids=input_ids,
-                             input_mask=input_mask,
-                             segment_ids=segment_ids,
-                             lm_label_ids=lm_label_ids,
-                             is_next=example.is_next)
+    features = InputFeatures(input_ids    = input_ids,
+                             input_mask   = input_mask,
+                             segment_ids  = segment_ids,
+                             lm_label_ids = lm_label_ids,
+                             is_next      = example.is_next)
     return features
-
 
 def main():
     parser = argparse.ArgumentParser()
@@ -474,8 +472,8 @@ def main():
         print("Loading Train Dataset", args.train_file)
         train_dataset = BERTDataset(args.train_file, tokenizer, seq_len=args.max_seq_length,
                                     corpus_lines=None, on_memory=args.on_memory)
-        num_train_optimization_steps = int(
-            len(train_dataset) / args.train_batch_size / args.gradient_accumulation_steps) * args.num_train_epochs
+
+        num_train_optimization_steps = int(len(train_dataset) / args.train_batch_size / args.gradient_accumulation_steps) * args.num_train_epochs
         if args.local_rank != -1:
             num_train_optimization_steps = num_train_optimization_steps // torch.distributed.get_world_size()
 
@@ -533,9 +531,9 @@ def main():
             tr_loss = 0
             nb_tr_examples, nb_tr_steps = 0, 0
             for step, batch in enumerate(tqdm(train_dataloader, desc="Iteration")):
-                batch                                                     = tuple(t.to(device) for t in batch)
+                batch = tuple(t.to(device) for t in batch)
                 input_ids, input_mask, segment_ids, lm_label_ids, is_next = batch
-                loss                                                      = model(input_ids, segment_ids, input_mask, lm_label_ids, is_next)
+                loss = model(input_ids, segment_ids, input_mask, lm_label_ids, is_next)
 
                 if n_gpu > 1:                            loss = loss.mean() # mean() to average on multi-gpu.
                 if args.gradient_accumulation_steps > 1: loss = loss / args.gradient_accumulation_steps
@@ -565,7 +563,6 @@ def main():
         output_model_file = os.path.join(args.output_dir, "pytorch_model_{}.bin".format(time.strftime("%Y_%m_%d_%H_%M_%S", time.localtime())))
         if args.do_train:
             torch.save(model_to_save.state_dict(), output_model_file)
-
 
 def _truncate_seq_pair(tokens_a, tokens_b, max_length):
     """Truncates a sequence pair in place to the maximum length."""

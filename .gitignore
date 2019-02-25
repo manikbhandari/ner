@@ -2,6 +2,7 @@ src/transformer-xl/LM*/
 data/*
 word_piece_data/*
 output/*
+trained_model/*
 cloned_repos/*
 # Byte-compiled / optimized / DLL files
 __pycache__/

@@ -15,8 +15,11 @@ from torch.utils.data.distributed import DistributedSampler
 from pytorch_pretrained_bert.tokenization import BertTokenizer
 from pytorch_pretrained_bert.modeling import BertModel
 
-logging.basicConfig(format = '%(asctime)s - %(levelname)s - %(name)s -   %(message)s', datefmt = '%m/%d/%Y %H:%M:%S', level = logging.INFO,
+logging.basicConfig(format='%(asctime)s - %(levelname)s - %(name)s -   %(message)s', 
+                    datefmt='%m/%d/%Y %H:%M:%S', 
+                    level=logging.INFO,
                     filename='logs/bert_pretrained_{}.log'.format(time.strftime("%Y_%m_%d_%H_%M_%S", time.localtime())), filemode='a')
+
 console = logging.StreamHandler()
 console.setLevel(logging.INFO)
 formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(name)s -   %(message)s')
@@ -302,6 +305,7 @@ def main():
     parser.add_argument("--dataset",     default='BC5CDR', type=str)
     parser.add_argument("--bert_model",  default='bert-base-cased', type=str, help="Bert pre-trained model selected in the list: bert-base-uncased, "
                                                                                      "bert-large-uncased, bert-base-cased, bert-base-multilingual, bert-base-chinese.")
+    parser.add_argument("--state_dict",  default=None, help="path to state dict of a trained model if present. Load pretrained weights otherwise.")
 
     parser.add_argument("--do_lower_case",  action='store_true',              help="Set this flag if you are using an uncased model.")
     parser.add_argument("--max_seq_length", default=128,           type=int,  help="The maximum total input sequence length after WordPiece tokenization. Sequences longer "
@@ -331,7 +335,7 @@ def main():
 
     tokenizer     = BertTokenizer.from_pretrained(args.bert_model, do_lower_case=args.do_lower_case)
 
-    model = BertModel.from_pretrained(args.bert_model)
+    model = BertModel.from_pretrained(args.bert_model, state_dict=torch.load(args.state_dict) if args.state_dict else None)
     model.to(args.device)
 
     if args.local_rank != -1:
