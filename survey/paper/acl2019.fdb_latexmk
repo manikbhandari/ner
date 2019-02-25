@@ -1,12 +1,12 @@
 # Fdb version 3
-["bibtex acl2019"] 1550987458 "acl2019.aux" "acl2019.bbl" "acl2019" 1550987459
+["bibtex acl2019"] 1550987458 "acl2019.aux" "acl2019.bbl" "acl2019" 1550987793
   "./acl_natbib.bst" 1546928942 47585 c671f071a8f3957857acb307a7173505 ""
-  "acl2019.aux" 1550987459 926 f3677c3ac896b500f818c8cd3a3dd075 ""
+  "acl2019.aux" 1550987793 926 f3677c3ac896b500f818c8cd3a3dd075 ""
   "acl2019.bib" 1550986794 510 c3ff5dfc95ef4bf23a8500658f964fda ""
   (generated)
   "acl2019.bbl"
   "acl2019.blg"
-["pdflatex"] 1550987458 "acl2019.tex" "acl2019.pdf" "acl2019" 1550987459
+["pdflatex"] 1550987791 "acl2019.tex" "acl2019.pdf" "acl2019" 1550987793
   "/usr/local/texlive/2018/texmf-dist/fonts/enc/dvips/base/8r.enc" 1480098666 4850 80dc9bab7f31fb78a000ccfed0e27cab ""
   "/usr/local/texlive/2018/texmf-dist/fonts/map/fontname/texfonts.map" 1511824771 3332 103109f5612ad95229751940c61aada0 ""
   "/usr/local/texlive/2018/texmf-dist/fonts/tfm/adobe/courier/pcrr7t.tfm" 1480098688 960 379cc0019370a9e0208a0a3f949f847a ""
@@ -79,15 +79,16 @@
   "/usr/local/texlive/2018/texmf-var/fonts/map/pdftex/updmap/pdftex.map" 1523934492 2717033 f61a5287d9c22a39a74f1979fe3f905c ""
   "/usr/local/texlive/2018/texmf-var/web2c/pdftex/pdflatex.fmt" 1528998058 4220280 56dcacce3c511b82102be813b712e39f ""
   "/usr/local/texlive/2018/texmf.cnf" 1523934483 577 0b39adfd7c93507ff20c9c14c2f1a33f ""
-  "acl2019.aux" 1550987459 926 f3677c3ac896b500f818c8cd3a3dd075 ""
+  "acl2019.aux" 1550987793 926 f3677c3ac896b500f818c8cd3a3dd075 ""
   "acl2019.bbl" 1550987458 573 2e6ba34e63ae6347f9e01de22087030b "bibtex acl2019"
-  "acl2019.out" 1550987459 0 d41d8cd98f00b204e9800998ecf8427e ""
+  "acl2019.out" 1550987792 0 d41d8cd98f00b204e9800998ecf8427e ""
   "acl2019.sty" 1546928942 22052 527a462da91f4fc7ec79d8dbc895cad4 ""
   "acl2019.tex" 1550987453 1800 12b731b64a806191566972d34fd7ff7e ""
+  "images/autoner_tie_or_break.png" 1550984960 239405 ae244e7d0adbf9511ca344ffad4652bd ""
   "sections/introduction.tex" 1550983946 41 ef8214ab71c89abd1347b2c815df19ff ""
-  "sections/summary_of_papers.tex" 1550987056 324 11cf4bf465a9e827616a412ba271b1d7 ""
+  "sections/summary_of_papers.tex" 1550987779 333 884b64d78e20997d5d52397ce0065b02 ""
   (generated)
-  "acl2019.out"
-  "acl2019.aux"
-  "acl2019.log"
   "acl2019.pdf"
+  "acl2019.out"
+  "acl2019.log"
+  "acl2019.aux"

@@ -117,6 +117,9 @@ INPUT sections/introduction.tex
 INPUT sections/summary_of_papers.tex
 INPUT sections/summary_of_papers.tex
 INPUT /usr/local/texlive/2018/texmf-dist/fonts/tfm/adobe/times/ptmb7t.tfm
+INPUT images/autoner_tie_or_break.png
+INPUT ./images/autoner_tie_or_break.png
+INPUT ./images/autoner_tie_or_break.png
 INPUT acl2019.bbl
 INPUT acl2019.bbl
 INPUT /usr/local/texlive/2018/texmf-dist/fonts/tfm/adobe/times/ptmri7t.tfm
