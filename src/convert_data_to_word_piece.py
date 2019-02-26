@@ -43,7 +43,7 @@ def convert_file(fname, lbl_fname, tokenizer):
 	lbl_mask = [' '.join([str(m) for m in mask]) for mask in lbl_mask]
 
 
-	out_fname 	   = fname.replace('data', 'word_piece_data')
+	out_fname      = fname.replace('data', 'word_piece_data')
 	out_lbl_fname  = lbl_fname.replace('data', 'word_piece_data')
 	out_mask_fname = lbl_fname.replace('data', 'word_piece_data').replace('out_lbl.txt', 'out_mask.txt')
 

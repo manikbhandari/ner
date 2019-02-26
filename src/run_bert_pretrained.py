@@ -333,8 +333,7 @@ def main():
 
     logger.info("device: {} n_gpu: {} distributed training: {}".format(args.device, n_gpu, bool(args.local_rank != -1)))
 
-    tokenizer     = BertTokenizer.from_pretrained(args.bert_model, do_lower_case=args.do_lower_case)
-
+    tokenizer = BertTokenizer.from_pretrained(args.bert_model, do_lower_case=args.do_lower_case)
     model = BertModel.from_pretrained(args.bert_model, state_dict=torch.load(args.state_dict) if args.state_dict else None)
     model.to(args.device)
 
