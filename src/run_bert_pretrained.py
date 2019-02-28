@@ -14,6 +14,7 @@ from torch.utils.data.distributed import DistributedSampler
 
 from pytorch_pretrained_bert.tokenization import BertTokenizer
 from pytorch_pretrained_bert.modeling import BertModel
+from pytorch_pretrained_bert.modeling import BertPreTrainedModel
 
 logging.basicConfig(format='%(asctime)s - %(levelname)s - %(name)s -   %(message)s', 
                     datefmt='%m/%d/%Y %H:%M:%S', 
@@ -333,8 +334,11 @@ def main():
 
     logger.info("device: {} n_gpu: {} distributed training: {}".format(args.device, n_gpu, bool(args.local_rank != -1)))
 
-    tokenizer = BertTokenizer.from_pretrained(args.bert_model, do_lower_case=args.do_lower_case)
-    model = BertModel.from_pretrained(args.bert_model, state_dict=torch.load(args.state_dict) if args.state_dict else None)
+    dataset   = args.dataset
+    voc_fname = '../word_piece_data/{}/vocab.txt'.format(args.dataset)
+    tokenizer = BertTokenizer(voc_fname, do_lower_case=args.do_lower_case)
+
+    model = BertModel.from_pretrained('../trained_model/{}'.format(args.dataset))
     model.to(args.device)
 
     if args.local_rank != -1:
