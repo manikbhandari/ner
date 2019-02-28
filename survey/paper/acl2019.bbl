@@ -1,9 +1,25 @@
-\begin{thebibliography}{1}
+\begin{thebibliography}{3}
 \expandafter\ifx\csname natexlab\endcsname\relax\def\natexlab#1{#1}\fi
 
-\bibitem[{Shang et~al.(2018)Shang, Liu, Gu, Ren, Ren, and Han}]{autoner}
+\bibitem[{Dai* et~al.(2019)Dai*, Yang*, Yang, Cohen, Carbonell, Le, and
+  Salakhutdinov}]{transformerxl}
+Zihang Dai*, Zhilin Yang*, Yiming Yang, William~W. Cohen, Jaime Carbonell,
+  Quoc~V. Le, and Ruslan Salakhutdinov. 2019.
+\newblock \href {https://openreview.net/forum?id=HJePno0cYm} {Transformer-{XL}:
+  Language modeling with longer-term dependency}.
+
+\bibitem[{Shang et~al.(2018{\natexlab{a}})Shang, Liu, Jiang, Ren, Voss, and
+  Han}]{autophrase}
+Jingbo Shang, Jialu Liu, Meng Jiang, Xiang Ren, Clare~R. Voss, and Jiawei Han.
+  2018{\natexlab{a}}.
+\newblock Automated phrase mining from massive text corpora.
+\newblock \emph{IEEE Transactions on Knowledge and Data Engineering},
+  30:1825--1837.
+
+\bibitem[{Shang et~al.(2018{\natexlab{b}})Shang, Liu, Gu, Ren, Ren, and
+  Han}]{autoner}
 Jingbo Shang, Liyuan Liu, Xiaotao Gu, Xiang Ren, Teng Ren, and Jiawei Han.
-  2018.
+  2018{\natexlab{b}}.
 \newblock \href {http://aclweb.org/anthology/D18-1230} {Learning named entity
   tagger using domain-specific dictionary}.
 \newblock In \emph{Proceedings of the 2018 Conference on Empirical Methods in
