@@ -38,7 +38,9 @@ The only difference between $\hat{p}$ and $p$ is that to get $\hat{p}$ you mask 
 
 Essentially this punishes the model if it gives any weight to those values and allows the model to learn whatever it wants for the probable types.
 
-\reminder{Maybe there's something wrong here.} But if the above is true, the model never gets to see the true type in the current context. How will the model learn to disambiguate?
+\reminder{Maybe there's something wrong here.} But if the above is true, the model never gets to see the true type in the current context. How will the model learn to disambiguate? Ideally the supervision in context that's provided should be given more weightage.
+
+\reminder{Doubt} Is there supervision provided in context? Or are you only given the set of possible types of each entity?
 
 
 \begin{figure*}[t]
