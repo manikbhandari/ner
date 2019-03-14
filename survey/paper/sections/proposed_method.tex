@@ -4,5 +4,5 @@
 \begin{enumerate}
 	\item Using transfer learning, we avoid the problem of lack of a huge corpus for getting contextualized embeddings.
 	\item We use additional low-level, syntactic tasks which provide low level supervision and force the model to learn syntactic information. This syntactic information like POS tags can be used by the model to predict Named Entities \cite{autoner} \reminder{Also cite POS paper}.
-	\item Using contextualized embeddings should ideally learn to disambiguate the types based on the context.
+	\item We also learn a \textit{type embedding} and use contextualized embeddings of a candidate named entity along with the type embedding to score whether the candidate is of that type. Scoring is done using simple \textit{dot product}. \reminder{Experiment with other scoring functions}.
 \end{enumerate}
