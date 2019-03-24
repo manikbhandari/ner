@@ -73,6 +73,8 @@ class BERTDataset(Dataset):
                         self.corpus_lines = self.corpus_lines + 1 # global count of all lines
 
             # if last row in file is not empty. This handles my case.
+            if len(self.all_docs) == 0:
+                self.all_docs.append(doc)
             if self.all_docs[-1] != doc:
                 self.all_docs.append(doc)
                 self.sample_to_doc.pop()
@@ -390,9 +392,8 @@ def convert_example_to_features(example, max_seq_length, tokenizer):
 
 def main():
     parser = argparse.ArgumentParser()
-
     ## Required parameters
-    parser.add_argument("-train_file",        required=True,   help="The input train corpus.")
+    parser.add_argument("-train_file", required=True, help="The input train corpus.")
 
     parser.add_argument("-output_dir", default='../trained_model', help="The output directory where the model checkpoints will be written.")
     parser.add_argument("-bert_model", default='bert-base-cased', help="bert-base-uncased, bert-large-uncased, bert-base-cased")
@@ -413,14 +414,12 @@ def main():
     parser.add_argument("-on_memory",     action='store_true', help="Whether to load train samples into memory or use disk")
     parser.add_argument("-do_lower_case", action='store_true', help="Whether to lower case the input text.")
     parser.add_argument("-do_train",      action='store_true', help="Whether to run training.")
-    parser.add_argument('-fp16',          action='store_true', help="Whether to use 16-bit float precision instead of 32-bit")
 
     args = parser.parse_args()
 
     device = torch.device("cuda" if torch.cuda.is_available() and not args.no_cuda else "cpu")
     n_gpu = torch.cuda.device_count()
-
-    logger.info("device: {} n_gpu: {}, distributed training: {}, 16-bits training: {}".format(device, n_gpu, bool(args.local_rank != -1), args.fp16))
+    logger.info("device: {} n_gpu: {}, distributed training: {}".format(device, n_gpu, bool(args.local_rank != -1)))
 
     random.seed(args.seed)
     np.random.seed(args.seed)
@@ -435,6 +434,8 @@ def main():
         os.makedirs(args.output_dir)
 
     tokenizer = BertTokenizer.from_pretrained(args.bert_model, do_lower_case=args.do_lower_case)
+    # import pdb
+    # pdb.set_trace()
 
     #train_examples = None
     num_train_optimization_steps = None
@@ -479,7 +480,7 @@ def main():
             for step, batch in enumerate(tqdm(train_dataloader, desc="Iteration")):
                 batch = tuple(t.to(device) for t in batch)
                 input_ids, input_mask, segment_ids, lm_label_ids, is_next = batch
-                loss = model(input_ids, segment_ids, input_mask, lm_label_ids, is_next)
+                loss, encoded_seq = model(input_ids, segment_ids, input_mask, lm_label_ids, is_next, get_encoded_seq=True) # Language modeling loss
 
                 if n_gpu > 1: loss = loss.mean() # mean() to average on multi-gpu.
                 loss.backward()
