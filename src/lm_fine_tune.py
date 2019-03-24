@@ -405,13 +405,13 @@ def main():
     parser = argparse.ArgumentParser()
 
     ## Required parameters
-    parser.add_argument("--train_file",        default=None, type=str, required=True,   help="The input train corpus.")
+    parser.add_argument("--train_file", default=None, type=str, required=True,   help="The input train corpus.")
 
-    parser.add_argument("--output_dir",        default='../trained_model', type=str,    help="The output directory where the model checkpoints will be written.")
-    parser.add_argument("--bert_model",        default='bert-base-cased', type=str,     help="Bert pre-trained model selected in the list: bert-base-uncased, "
-                                                                                          "bert-large-uncased, bert-base-cased, bert-base-multilingual, bert-base-chinese.")
+    parser.add_argument("--output_dir", default='../trained_model', type=str, help="The output directory where the model checkpoints will be written.")
+    parser.add_argument("--bert_model", default='bert-base-cased', type=str, help="bert-base-uncased, bert-large-uncased, \
+                                                                                    bert-base-cased, bert-base-multilingual, bert-base-chinese.")
     ## Other parameters
-    parser.add_argument("--max_seq_length",    default=128,  type=int,                  help="The maximum total input sequence length after WordPiece tokenization. \n"
+    parser.add_argument("--max_seq_length", default=128, type=int, help="The maximum total input sequence length after WordPiece tokenization. \n"
                                                                                          "Sequences longer than this will be truncated, and sequences shorter \n"
                                                                                          "than this will be padded.")
 
@@ -535,11 +535,15 @@ def main():
                 input_ids, input_mask, segment_ids, lm_label_ids, is_next = batch
                 loss = model(input_ids, segment_ids, input_mask, lm_label_ids, is_next)
 
-                if n_gpu > 1:                            loss = loss.mean() # mean() to average on multi-gpu.
-                if args.gradient_accumulation_steps > 1: loss = loss / args.gradient_accumulation_steps
+                if n_gpu > 1:                            
+                    loss = loss.mean() # mean() to average on multi-gpu.
+                if args.gradient_accumulation_steps > 1: 
+                    loss = loss / args.gradient_accumulation_steps
 
-                if args.fp16: optimizer.backward(loss)
-                else:         loss.backward()
+                if args.fp16: 
+                    optimizer.backward(loss)
+                else:         
+                    loss.backward()
 
                 tr_loss         += loss.item()
                 nb_tr_examples  += input_ids.size(0)
