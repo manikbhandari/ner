@@ -6,7 +6,7 @@ AutoNER \cite{autoner} is the recent SOTA in domain-specific NER. It has two con
 \\
 
 \noindent\textbf{Tie-or-Break Scheme}
-In a sentence, predict whether two words should be tied together to form one phrase or broken apart. Now, between every to 'breaks' you have a potential named entity. Predict its type ('None' being the type that it's not a named entity).
+In a sentence, predict whether two words should be tied together to form one phrase or broken apart. Now, between every to \textit{breaks} you have a potential named entity. Predict its type (\textit{None} being the type that it's not a named entity).
 
 Training data for these phrases comes from another paper of the same group \cite{autophrase} which uses unsupervised methods to extract interesting phrases from a large corpus.
 \\
@@ -38,7 +38,9 @@ The only difference between $\hat{p}$ and $p$ is that to get $\hat{p}$ you mask 
 
 Essentially this punishes the model if it gives any weight to those values and allows the model to learn whatever it wants for the probable types.
 
-\reminder{Maybe there's something wrong here.} But if the above is true, the model never gets to see the true type in the current context. How will the model learn to disambiguate?
+\reminder{Maybe there's something wrong here.} But if the above is true, the model never gets to see the true type in the current context. How will the model learn to disambiguate? Ideally the supervision in context that's provided should be given more weightage.
+
+\reminder{Doubt} Is there supervision provided in context? Or are you only given the set of possible types of each entity?
 
 
 \begin{figure*}[t]
